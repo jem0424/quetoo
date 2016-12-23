@@ -72,6 +72,11 @@
 	extern cg_particles_t *cg_particles_bullet[3];
 	extern cg_particles_t *cg_particles_ripple[3];
 
+	extern cg_particles_t *cg_particles_explo_wave;
+	extern cg_particles_t *cg_particles_explo_flash;
+	extern cg_particles_t *cg_particles_explo_embers1;
+	extern cg_particles_t *cg_particles_explo_embers2;
+
 	void Cg_UpdateMedia(void);
 #endif /* __CG_LOCAL_H__ */
 

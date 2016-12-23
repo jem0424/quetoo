@@ -403,7 +403,89 @@ static void Cg_ExplosionEffect(const vec3_t org) {
 	cg_particle_t *p;
 	r_sustained_light_t s;
 
-	if ((p = Cg_AllocParticle(PARTICLE_ROLL, cg_particles_explosion))) {
+	if ((p = Cg_AllocParticle(PARTICLE_SPLASH, cg_particles_explo_wave))) {
+
+		p->effects = PARTICLE_EFFECT_COLOR | PARTICLE_EFFECT_SCALE;
+		p->lifetime = 200 + Randomf() * 200;
+
+		cgi.ColorFromPalette(EFFECT_COLOR_WHITE + (Random() & 2), p->color_start);
+		VectorCopy(p->color_start, p->color_end);
+		p->color_start[3] = 2.0;
+		p->color_end[3] = 0.0;
+
+		p->scale_start = 0.0;
+		p->scale_end = 88.0 + Randomc() * 8.0;
+
+		VectorCopy(org, p->part.org);
+	}
+
+	if ((p = Cg_AllocParticle(PARTICLE_NORMAL, cg_particles_explo_flash))) {
+
+		p->effects = PARTICLE_EFFECT_SCALE;
+		p->lifetime = 100 + Randomf() * 50;
+
+		Vector4Set(p->part.color, 1.0, 1.0, 1.0, 1.0);
+
+		p->scale_start = 32 + Randomc() * 8.0;
+		p->scale_end = (p->scale_start * 2.5);
+
+		VectorCopy(org, p->part.org);
+	}
+
+	if ((p = Cg_AllocParticle(PARTICLE_ROLL, cg_particles_explo_embers1))) {
+
+		p->effects = PARTICLE_EFFECT_COLOR | PARTICLE_EFFECT_SCALE;
+		p->lifetime = 500 + Randomf() * 200;
+		
+		Vector4Set(p->color_start, 1.0, 1.0, 1.0, 1.5);
+		Vector4Set(p->color_end, 1.0, 1.0, 1.0, 0.0);
+
+		p->scale_start = 86 + Randomc() * 8.0;
+		p->scale_end = (p->scale_start * 2.0);
+
+		p->part.roll = Randomc() * 64.0;
+
+		VectorCopy(org, p->part.org);
+	}
+
+	if ((p = Cg_AllocParticle(PARTICLE_ROLL, cg_particles_explo_embers2))) {
+
+		p->effects = PARTICLE_EFFECT_COLOR | PARTICLE_EFFECT_SCALE;
+		p->lifetime = 500 + Randomf() * 200;
+		
+		Vector4Set(p->color_start, 1.0, 1.0, 1.0, 2.0);
+		Vector4Set(p->color_end, 1.0, 1.0, 1.0, 0.0);
+
+		p->scale_start = 64 + Randomc() * 8.0;
+		p->scale_end = (p->scale_start * 1.5);
+
+		p->part.roll = Randomc() * 64.0;
+
+		VectorCopy(org, p->part.org);
+	}
+
+	for (int32_t k = 20 + (Randomf() * 20.0); k > 0; --k) {
+		if ((p = Cg_AllocParticle(PARTICLE_SPARK, cg_particles_beam))) {
+
+			p->lifetime = 150 + Randomf() * 150;
+
+			cgi.ColorFromPalette(221 + (Random() & 4), p->part.color);
+			p->part.color[3] = 0.7 + Randomf() * 0.3;
+
+			p->part.scale = 1.9 + Randomf() * 0.2;
+
+			VectorCopy(org, p->part.org);
+
+			VectorSet(p->vel, Randomc() * 290, Randomc() * 290, Randomc() * 290);
+
+			p->accel[2] = -0.75 * PARTICLE_GRAVITY;
+			p->spark.length = 0.05 + Randomf() * 0.02;
+
+			VectorMA(p->part.org, p->spark.length, p->vel, p->part.end);
+		}
+	}
+
+	/*if ((p = Cg_AllocParticle(PARTICLE_ROLL, cg_particles_explosion))) {
 
 		p->lifetime = 250;
 		p->effects = PARTICLE_EFFECT_COLOR | PARTICLE_EFFECT_SCALE;
@@ -529,7 +611,7 @@ static void Cg_ExplosionEffect(const vec3_t org) {
 		p->part.blend = GL_ONE_MINUS_SRC_ALPHA;
 
 		VectorSet(p->accel, 0.0, 0.0, -PARTICLE_GRAVITY * 2.0);
-	}
+	}*/
 
 	VectorCopy(org, s.light.origin);
 	s.light.radius = 200.0;

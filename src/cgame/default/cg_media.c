@@ -68,6 +68,11 @@ cg_particles_t *cg_particles_inactive;
 cg_particles_t *cg_particles_bullet[3];
 cg_particles_t *cg_particles_ripple[3];
 
+cg_particles_t *cg_particles_explo_wave;
+cg_particles_t *cg_particles_explo_flash;
+cg_particles_t *cg_particles_explo_embers1;
+cg_particles_t *cg_particles_explo_embers2;
+
 /**
  * @brief Updates all media references for the client game.
  */
@@ -156,6 +161,11 @@ void Cg_UpdateMedia(void) {
 		g_snprintf(name, sizeof(name), "particles/ripple_%zd", i);
 		cg_particles_ripple[i] = Cg_AllocParticles(cgi.LoadImage(name, IT_EFFECT), true);
 	}
+
+	cg_particles_explo_wave = Cg_AllocParticles(cgi.LoadImage("particles/explowave.tga", IT_EFFECT), true);
+	cg_particles_explo_flash = Cg_AllocParticles(cgi.LoadImage("particles/exploflash.tga", IT_EFFECT), true);
+	cg_particles_explo_embers1 = Cg_AllocParticles(cgi.LoadImage("particles/exploembers.tga", IT_EFFECT), true);
+	cg_particles_explo_embers2 = Cg_AllocParticles(cgi.LoadImage("particles/exploembers2.tga", IT_EFFECT), true);
 
 	Cg_SetupParticleAtlas();
 
