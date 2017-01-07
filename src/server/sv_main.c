@@ -130,7 +130,7 @@ static void Sv_Ack_f(void) {
 static void Sv_Info_f(void) {
 	char string[MAX_MSG_SIZE];
 
-	if (sv.demo_file) {
+	if (sv.state == SV_ACTIVE_DEMO) {
 		Com_Debug(DEBUG_SERVER, "Demo server ignoring server info request\n");
 		return;
 	}
@@ -782,6 +782,9 @@ void Sv_Frame(const uint32_t msec) {
 
 		// send the resulting frame to connected clients
 		Sv_SendClientPackets();
+
+		// write demo frame if we're recording
+		Sv_RecordDemoFrame();
 
 		// decrement the simulation time
 		frame_delta -= QUETOO_TICK_MILLIS;

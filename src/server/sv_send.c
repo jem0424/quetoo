@@ -149,7 +149,7 @@ static void Sv_ClientDatagramMessage(sv_client_t *cl, byte *data, size_t len) {
 }
 
 /**
- * @brief Sends the contents of the mutlicast buffer to a single client
+ * @brief Sends the contents of the multicast buffer to a single client
  */
 void Sv_Unicast(const g_entity_t *ent, const _Bool reliable) {
 
@@ -224,6 +224,8 @@ void Sv_Multicast(const vec3_t origin, multicast_t to, EntityFilterFunc filter) 
 			Mem_ClearBuffer(&sv.multicast);
 			return;
 	}
+
+	Sv_RecordDemoMulticast();
 
 	// send the data to all relevant clients
 	sv_client_t *cl = svs.clients;

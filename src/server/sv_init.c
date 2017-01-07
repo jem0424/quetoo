@@ -141,7 +141,11 @@ static void Sv_ClearState() {
 	if (svs.initialized) { // if we were intialized, cleanup
 
 		if (sv.demo_file) {
-			Fs_Close(sv.demo_file);
+			if (sv.demo_record) {
+				Sv_Stop_f();
+			} else {
+				Fs_Close(sv.demo_file);
+			}
 		}
 	}
 

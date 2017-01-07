@@ -93,6 +93,7 @@ typedef struct {
 
 	// demo server information
 	file_t *demo_file;
+	_Bool demo_record; // whether we're server-recording
 } sv_server_t;
 
 typedef struct {

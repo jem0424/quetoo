@@ -413,5 +413,8 @@ void Sv_InitAdmin(void) {
 		Cmd_Add("tell", Sv_Tell_f, CMD_SERVER, "Send a private chat message");
 		Cmd_Add("stuff", Sv_Stuff_f, CMD_SERVER, "Force a client to execute a command");
 	}
+
+	Cmd_Add("sv_record", Sv_Record_f, CMD_SERVER, "Begin recording a server demo.");
+	Cmd_Add("sv_stop", Sv_Stop_f, CMD_SERVER, "Stop a server recording");
 }
 
