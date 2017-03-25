@@ -409,9 +409,48 @@ typedef struct {
 	const vec_t *start, *end;
 	vec3_t box_mins, box_maxs; // enclose the test object along entire move
 	cm_trace_t trace;
-	const g_entity_t *skip;
 	int32_t contents;
+	TraceCallback callback;
+	void *userdata;
 } sv_trace_t;
+
+static vec_t Sv_ClipTraceToEntities_Callback(const cm_trace_t *trace, void *userdata) {
+
+	if (!userdata || !trace->ent) {
+		return trace->fraction;
+	}
+
+	const g_entity_t *skip = userdata;
+
+	if (trace->ent == skip) {
+		return TRACE_IGNORE;    // explicitly (ourselves)
+	}
+
+	if (trace->ent->owner == skip) {
+		return TRACE_IGNORE;    // or via ownership (we own it)
+	}
+
+	if (skip->owner) {
+
+		if (trace->ent == skip->owner) {
+			return TRACE_IGNORE;    // which is bidirectional (inverse of previous case)
+		}
+
+		if (trace->ent->owner == skip->owner) {
+			return TRACE_IGNORE;    // and commutative (we are both owned by the same)
+		}
+	}
+
+	// triggers only clip to the world (while other entities can occupy triggers)
+	if (skip->solid == SOLID_TRIGGER) {
+
+		if (trace->ent->solid != SOLID_BSP) {
+			return TRACE_IGNORE;
+		}
+	}
+
+	return trace->fraction;
+}
 
 /**
  * @brief Clips the specified trace to other entities in its area. This is the basis of all
@@ -425,50 +464,19 @@ static void Sv_ClipTraceToEntities(sv_trace_t *trace) {
 	for (size_t i = 0; i < len; i++) {
 		g_entity_t *ent = e[i];
 
-		if (trace->skip) { // see if we can skip it
-
-			if (ent == trace->skip) {
-				continue;    // explicitly (ourselves)
-			}
-
-			if (ent->owner == trace->skip) {
-				continue;    // or via ownership (we own it)
-			}
-
-			if (trace->skip->owner) {
-
-				if (ent == trace->skip->owner) {
-					continue;    // which is bidirectional (inverse of previous case)
-				}
-
-				if (ent->owner == trace->skip->owner) {
-					continue;    // and commutative (we are both owned by the same)
-				}
-			}
-
-			// triggers only clip to the world (while other entities can occupy triggers)
-			if (trace->skip->solid == SOLID_TRIGGER) {
-
-				if (ent->solid != SOLID_BSP) {
-					continue;
-				}
-			}
-		}
-
 		const int32_t head_node = Sv_HullForEntity(ent);
 		if (head_node != -1) {
 
 			const sv_entity_t *sent = &sv.entities[NUM_FOR_ENTITY(ent)];
 
 			const cm_trace_t tr = Cm_TransformedBoxTrace(
-			                          trace->start, trace->end, trace->mins, trace->maxs, head_node, trace->contents,
-			                          &sent->matrix, &sent->inverse_matrix);
+			                          trace->start, trace->end, trace->mins, trace->maxs, ent, head_node, trace->contents,
+			                          &sent->matrix, &sent->inverse_matrix, trace->callback, trace->userdata);
 
 			// check for a full or partial intersection
 			if (tr.all_solid || tr.fraction < trace->trace.fraction) {
 
 				trace->trace = tr;
-				trace->trace.ent = ent;
 
 				if (tr.all_solid) { // we were actually blocked
 					return;
@@ -480,12 +488,9 @@ static void Sv_ClipTraceToEntities(sv_trace_t *trace) {
 
 /**
  * @brief Moves the given box volume through the world from start to end.
- *
- * The skipped edict, and edicts owned by him, are explicitly not checked.
- * This prevents players from clipping against their own projectiles, etc.
  */
-cm_trace_t Sv_Trace(const vec3_t start, const vec3_t end, const vec3_t mins, const vec3_t maxs,
-                    const g_entity_t *skip, const int32_t contents) {
+cm_trace_t Sv_CustomTrace(const vec3_t start, const vec3_t end, const vec3_t mins, const vec3_t maxs,
+                    const int32_t contents, TraceCallback callback, void *userdata) {
 
 	sv_trace_t trace;
 
@@ -499,7 +504,7 @@ cm_trace_t Sv_Trace(const vec3_t start, const vec3_t end, const vec3_t mins, con
 	}
 
 	// clip to world
-	trace.trace = Cm_BoxTrace(start, end, mins, maxs, 0, contents);
+	trace.trace = Cm_BoxTrace(start, end, mins, maxs, NULL, 0, contents, callback, userdata);
 	if (trace.trace.fraction < 1.0) {
 		trace.trace.ent = svs.game->entities;
 
@@ -512,8 +517,10 @@ cm_trace_t Sv_Trace(const vec3_t start, const vec3_t end, const vec3_t mins, con
 	trace.end = end;
 	trace.mins = mins;
 	trace.maxs = maxs;
-	trace.skip = skip;
 	trace.contents = contents;
+
+	trace.callback = callback;
+	trace.userdata = userdata;
 
 	// create the bounding box of the entire move
 	Cm_TraceBounds(start, end, mins, maxs, trace.box_mins, trace.box_maxs);
@@ -522,4 +529,16 @@ cm_trace_t Sv_Trace(const vec3_t start, const vec3_t end, const vec3_t mins, con
 	Sv_ClipTraceToEntities(&trace);
 
 	return trace.trace;
+}
+
+/**
+ * @brief Moves the given box volume through the world from start to end.
+ *
+ * The skipped edict, and edicts owned by him, are explicitly not checked.
+ * This prevents players from clipping against their own projectiles, etc.
+ */
+cm_trace_t Sv_Trace(const vec3_t start, const vec3_t end, const vec3_t mins, const vec3_t maxs,
+                    const g_entity_t *skip, const int32_t contents) {
+
+	return Sv_CustomTrace(start, end, mins, maxs, contents, Sv_ClipTraceToEntities_Callback, (void *) skip);
 }

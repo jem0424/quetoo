@@ -135,6 +135,15 @@ typedef struct {
 	struct g_entity_s *ent; // not set by Cm_*() functions
 } cm_trace_t;
 
+/**
+ * @brief The callback function for traces. Returns either a TRACE_ constant below, or
+ * the fraction that the trace will be clipped to.
+ */
+typedef vec_t (*TraceCallback) (const cm_trace_t *trace, void *userdata);
+
+#define TRACE_IGNORE		-2.0
+#define TRACE_TERMINATE		-1.0
+
 typedef struct {
 	cm_bsp_plane_t *plane;
 	int32_t children[2]; // negative numbers are leafs

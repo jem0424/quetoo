@@ -441,6 +441,20 @@ typedef struct cg_import_s {
 	                    const int32_t contents);
 
 	/**
+	 * @brief Traces from `start` to `end`, clipping to all known solids matching the given `contents` mask.
+	 * @param start The trace start point.
+	 * @param end The trace end point.
+	 * @param mins The trace mins, or `NULL` for point trace.
+	 * @param maxs The trace maxs, or `NULL` for point trace.
+	 * @param contents Solids matching this mask will clip the returned trace.
+	 * @param callback The callback for this trace.
+	 * @param userdata Data to pass to the callback.
+	 * @return A trace result.
+	 */
+	cm_trace_t (*CustomTrace)(const vec3_t start, const vec3_t end, const vec3_t mins, const vec3_t maxs,
+	                    const int32_t contents, TraceCallback callback, void *userdata);
+
+	/**
 	 * @param p The point to check.
 	 * @param model The model to check within, or `NULL` for the world model.
 	 * @return The BSP leaf at the given point `p`, in the given `model`.

@@ -116,6 +116,38 @@ static void G_Tracer(const vec3_t start, const vec3_t end) {
 }
 
 /**
+ * @brief
+ */
+static vec_t G_RippleViscosityForContents(const int32_t contents) {
+	if (contents & CONTENTS_SLIME) {
+		return 20.0;
+	} else if (contents & CONTENTS_LAVA) {
+		return 30.0;
+	} else if (contents & CONTENTS_WATER) {
+		return 10.0;
+	}
+
+	gi.Debug("failed to resolve water type\n");
+	return 0.0;
+}
+
+/**
+ * @brief Emit a water ripple and optional splash effect on a plane.
+ */
+static void G_RipplePlane(const vec3_t pos, const vec3_t dir, const vec_t viscosity, const vec_t size, const _Bool splash) {
+
+	gi.WriteByte(SV_CMD_TEMP_ENTITY);
+	gi.WriteByte(TE_RIPPLE);
+	gi.WritePosition(pos);
+	gi.WriteDir(dir);
+	gi.WriteByte((uint8_t) size);
+	gi.WriteByte((uint8_t) viscosity);
+	gi.WriteByte((uint8_t) splash);
+
+	gi.Multicast(pos, MULTICAST_PVS, NULL);
+}
+
+/**
  * @brief Emit a water ripple and optional splash effect.
  * @details The caller must pass either an entity, or two points to trace between.
  * @param ent The entity entering the water, or NULL.
@@ -154,18 +186,7 @@ void G_Ripple(g_entity_t *ent, const vec3_t pos1, const vec3_t pos2, vec_t size,
 		return;
 	}
 
-	vec_t viscosity;
-
-	if (tr.contents & CONTENTS_SLIME) {
-		viscosity = 20.0;
-	} else if (tr.contents & CONTENTS_LAVA) {
-		viscosity = 30.0;
-	} else if (tr.contents & CONTENTS_WATER) {
-		viscosity = 10.0;
-	} else {
-		gi.Debug("%s failed to resolve water type\n", etos(ent));
-		return;
-	}
+	const vec_t viscosity = G_RippleViscosityForContents(tr.contents);
 
 	vec3_t pos, dir;
 
@@ -183,29 +204,13 @@ void G_Ripple(g_entity_t *ent, const vec3_t pos1, const vec3_t pos2, vec_t size,
 		}
 	}
 
-	gi.WriteByte(SV_CMD_TEMP_ENTITY);
-	gi.WriteByte(TE_RIPPLE);
-	gi.WritePosition(pos);
-	gi.WriteDir(dir);
-	gi.WriteByte((uint8_t) size);
-	gi.WriteByte((uint8_t) viscosity);
-	gi.WriteByte((uint8_t) splash);
-
-	gi.Multicast(pos, MULTICAST_PVS, NULL);
+	G_RipplePlane(pos, dir, viscosity, size, splash);
 
 	if (!(tr.contents & CONTENTS_TRANSLUCENT)) {
 		VectorAdd(tr.end, vec3_down, pos);
 		VectorNegate(dir, dir);
 
-		gi.WriteByte(SV_CMD_TEMP_ENTITY);
-		gi.WriteByte(TE_RIPPLE);
-		gi.WritePosition(pos);
-		gi.WriteDir(dir);
-		gi.WriteByte((uint8_t) size);
-		gi.WriteByte((uint8_t) viscosity);
-		gi.WriteByte((uint8_t) false);
-
-		gi.Multicast(pos, MULTICAST_PVS, NULL);
+		G_RipplePlane(pos, dir, viscosity, size, splash);
 	}
 }
 
@@ -955,12 +960,76 @@ void G_LightningProjectile(g_entity_t *ent, const vec3_t start, const vec3_t dir
 	projectile->locals.timestamp = g_level.time;
 }
 
+typedef struct {
+	g_entity_t *hit;
+	const vec_t fraction;
+	const vec3_t end;
+	const vec3_t normal;
+} g_railtrail_hit_t;
+
+typedef struct {
+	vec3_t start, end;
+	const g_entity_t *player;
+	GArray *entities;
+	vec_t last_liquid;
+} g_railtrail_data_t;
+
+/**
+ * @brief
+ */
+static vec_t G_RailgunProjectile_TraceCallback(const cm_trace_t *trace, void *userdata) {
+	g_railtrail_data_t *data = (g_railtrail_data_t *) userdata;
+	
+	if (trace->ent) {
+		// if we hit an entity, and it's not the shooter, throw it in the list
+		if (trace->ent != data->player && G_TakesDamage(trace->ent)) {
+			_Bool already_hit = false;
+			
+			for (size_t i = 0; i < data->entities->len; i++) {
+				const g_railtrail_hit_t *hit = &g_array_index(data->entities, const g_railtrail_hit_t, i);
+
+				if (hit->hit == trace->ent) {
+					already_hit = true;
+					break;
+				}
+			}
+
+			if (!already_hit) {
+				g_array_append_vals(data->entities, &(const g_railtrail_hit_t) {
+					.hit = trace->ent,
+					.fraction = trace->fraction,
+					.end = { trace->end[0], trace->end[1], trace->end[2] },
+					.normal = { trace->plane.normal[0], trace->plane.normal[1], trace->plane.normal[2] },
+				}, 1);
+			}
+		}
+
+		return trace->ent->solid < SOLID_BSP ? TRACE_IGNORE : trace->fraction;
+	} else if (trace->surface->flags & MASK_LIQUID) {
+		// we hit a liquid, so make the liquid spurt and skip it.
+
+		if (!trace->start_solid && trace->fraction < data->last_liquid) {
+			data->last_liquid = trace->fraction;
+
+			vec3_t pos;
+			VectorLerp(data->start, data->end, trace->fraction, pos);
+
+			G_RipplePlane(pos, trace->plane.normal, G_RippleViscosityForContents(trace->contents), 24.0, true);
+			gi.PositionedSound(pos, NULL, g_media.sounds.water_in, ATTEN_NORM);
+		}
+
+		return TRACE_IGNORE;
+	}
+
+	return trace->fraction;
+}
+
 /**
  * @brief
  */
 void G_RailgunProjectile(g_entity_t *ent, const vec3_t start, const vec3_t dir, int16_t damage,
                          int16_t knockback) {
-	vec3_t pos, end, water_pos;
+	vec3_t pos, end;
 
 	VectorCopy(start, pos);
 
@@ -968,57 +1037,33 @@ void G_RailgunProjectile(g_entity_t *ent, const vec3_t start, const vec3_t dir, 
 		VectorCopy(ent->s.origin, pos);
 	}
 
-	int32_t content_mask = MASK_CLIP_PROJECTILE | MASK_LIQUID;
-	_Bool liquid = false;
-
-	// are we starting in water?
-	if (gi.PointContents(pos) & MASK_LIQUID) {
-		VectorCopy(pos, water_pos);
-
-		content_mask &= ~MASK_LIQUID;
-		liquid = true;
-	}
-
 	VectorMA(pos, MAX_WORLD_DIST, dir, end);
 
-	G_Ripple(NULL, pos, end, 24.0, true);
+	g_railtrail_data_t data;
+	data.last_liquid = 1.0;
+	data.player = ent;
+	VectorCopy(start, data.start);
+	VectorCopy(end, data.end);
+	data.entities = g_array_new(false, false, sizeof(g_railtrail_hit_t));
 
-	cm_trace_t tr;
-	memset(&tr, 0, sizeof(tr));
+	int32_t contents = MASK_CLIP_PROJECTILE | MASK_LIQUID;
 
-	g_entity_t *ignore = ent;
-	while (ignore) {
-		tr = gi.Trace(pos, end, NULL, NULL, ignore, content_mask);
-		if (!tr.ent) {
-			break;
-		}
-
-		if ((tr.contents & MASK_LIQUID) && !liquid) {
-			VectorCopy(tr.end, water_pos);
-
-			content_mask &= ~MASK_LIQUID;
-			liquid = true;
-
-			gi.PositionedSound(water_pos, NULL, g_media.sounds.water_in, ATTEN_NORM);
-
-			ignore = ent;
-			continue;
-		}
-
-		if (tr.ent->client || tr.ent->solid == SOLID_BOX) {
-			ignore = tr.ent;
-		} else {
-			ignore = NULL;
-		}
-
-		// we've hit something, so damage it
-		if ((tr.ent != ent) && G_TakesDamage(tr.ent)) {
-			G_Damage(tr.ent, ent, ent, dir, tr.end, tr.plane.normal, damage, knockback, 0,
-			         MOD_RAILGUN);
-		}
-
-		VectorCopy(tr.end, pos);
+	if (gi.PointContents(start) & MASK_LIQUID) {
+		contents &= ~MASK_LIQUID;
 	}
+
+	const cm_trace_t tr = gi.CustomTrace(start, end, NULL, NULL, contents, G_RailgunProjectile_TraceCallback, &data);
+
+	for (size_t i = 0; i < data.entities->len; i++) {
+		const g_railtrail_hit_t *hit = &g_array_index(data.entities, const g_railtrail_hit_t, i);
+
+		if (hit->fraction <= tr.fraction) {
+			G_Damage(hit->hit, ent, ent, dir, hit->end, hit->normal, damage, knockback, 0,
+			        MOD_RAILGUN);
+		}
+	}
+
+	g_array_free(data.entities, true);
 
 	// send rail trail
 	gi.WriteByte(SV_CMD_TEMP_ENTITY);

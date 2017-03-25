@@ -376,6 +376,7 @@ void Sv_InitGame(void) {
 	import.PositionedSound = Sv_PositionedSound;
 
 	import.Trace = Sv_Trace;
+	import.CustomTrace = Sv_CustomTrace;
 	import.PointContents = Sv_PointContents;
 	import.inPVS = Sv_InPVS;
 	import.inPHS = Sv_InPHS;

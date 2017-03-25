@@ -32,5 +32,7 @@ size_t Sv_BoxEntities(const vec3_t mins, const vec3_t maxs, g_entity_t **list, c
 int32_t Sv_PointContents(const vec3_t p);
 cm_trace_t Sv_Trace(const vec3_t start, const vec3_t end, const vec3_t mins, const vec3_t maxs,
                     const g_entity_t *skip, const int32_t contents);
+cm_trace_t Sv_CustomTrace(const vec3_t start, const vec3_t end, const vec3_t mins, const vec3_t maxs,
+                    const int32_t contents, TraceCallback callback, void *userdata);
 
 #endif /* __SV_LOCAL_H__ */

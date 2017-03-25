@@ -222,6 +222,7 @@ void Cl_InitCgame(void) {
 
 	import.PointContents = Cl_PointContents;
 	import.Trace = Cl_Trace;
+	import.CustomTrace = Cl_CustomTrace;
 
 	import.LeafForPoint = R_LeafForPoint;
 	import.LeafHearable = R_LeafHearable;

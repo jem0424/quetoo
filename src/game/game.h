@@ -304,6 +304,24 @@ typedef struct {
 	                    const g_entity_t *skip, const int32_t contents);
 
 	/**
+	 * @brief Collision detection. Traces between the two endpoints, impacting
+	 * world and solid entity planes matching the specified contents mask.
+	 *
+	 * @param start The start point.
+	 * @param end The end point.
+	 * @param mins The bounding box mins (optional).
+	 * @param maxs The bounding box maxs (optional).
+	 * @param contents The contents mask to intersect with (e.g. MASK_SOLID).
+	 * @param callback The callback for this trace.
+	 * @param userdata Data to pass to the callback.
+	 *
+	 * @return The resulting trace. A fraction less than 1.0 indicates that
+	 * the trace intersected a plane.
+	 */
+	cm_trace_t (*CustomTrace)(const vec3_t start, const vec3_t end, const vec3_t mins, const vec3_t maxs,
+	                    const int32_t contents, TraceCallback callback, void *userdata);
+
+	/**
 	 * @brief PVS and PHS query facilities, returning true if the two points
 	 * can see or hear each other.
 	 */

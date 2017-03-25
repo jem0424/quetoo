@@ -23,12 +23,13 @@
 
 #include "cm_types.h"
 
-cm_trace_t Cm_BoxTrace(const vec3_t start, const vec3_t end, const vec3_t mins, const vec3_t maxs,
-                       const int32_t head_node, const int32_t contents);
+cm_trace_t Cm_BoxTrace(const vec3_t start, const vec3_t end, const vec3_t mins, const vec3_t maxs, struct g_entity_s *ent,
+                       const int32_t head_node, const int32_t contents, TraceCallback callback, void *userdata);
 
 cm_trace_t Cm_TransformedBoxTrace(const vec3_t start, const vec3_t end, const vec3_t mins,
-                                  const vec3_t maxs, const int32_t head_node, const int32_t contents,
-                                  const matrix4x4_t *matrix, const matrix4x4_t *inverse_matrix);
+                                  const vec3_t maxs, struct g_entity_s *ent, const int32_t head_node, const int32_t contents,
+                                  const matrix4x4_t *matrix, const matrix4x4_t *inverse_matrix,
+								  TraceCallback callback, void *userdata);
 
 void Cm_EntityBounds(const solid_t solid, const vec3_t origin, const vec3_t angles,
                      const vec3_t mins, const vec3_t maxs, vec_t *bounds_mins, vec_t *bounds_maxs);

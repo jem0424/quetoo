@@ -85,9 +85,31 @@ typedef struct {
 	const vec_t *start, *end;
 	vec3_t box_mins, box_maxs;
 	cm_trace_t trace;
-	uint16_t skip;
 	int32_t contents;
+	TraceCallback callback;
+	void *userdata;
 } cl_trace_t;
+
+static vec_t Cl_ClipTraceToEntities_Callback(const cm_trace_t *trace, void *userdata) {
+	const uint16_t ent_number = (uint16_t) (ptrdiff_t) trace->ent;
+	const cl_entity_t *ent = &cl.entities[ent_number];
+
+	if (ent == cl.entity) {
+		return TRACE_IGNORE;
+	}
+
+	if (!userdata) {
+		return trace->fraction;
+	}
+
+	const uint16_t number = (uint16_t) (ptrdiff_t) userdata;
+
+	if (number == ent_number) {
+		return TRACE_IGNORE;
+	}
+
+	return trace->fraction;
+}
 
 /**
  * @brief Clips the specified trace to other solid entities in the frame.
@@ -103,15 +125,7 @@ static void Cl_ClipTraceToEntities(cl_trace_t *trace) {
 			continue;
 		}
 
-		if (s->number == trace->skip) {
-			continue;
-		}
-
 		const cl_entity_t *ent = &cl.entities[s->number];
-
-		if (ent == cl.entity) {
-			continue;
-		}
 
 		if (!BoxIntersect(ent->abs_mins, ent->abs_maxs, trace->box_mins, trace->box_maxs)) {
 			continue;
@@ -119,12 +133,11 @@ static void Cl_ClipTraceToEntities(cl_trace_t *trace) {
 
 		const int32_t head_node = Cl_HullForEntity(s);
 
-		cm_trace_t tr = Cm_TransformedBoxTrace(trace->start, trace->end, trace->mins, trace->maxs,
-		                                       head_node, trace->contents, &ent->matrix, &ent->inverse_matrix);
+		cm_trace_t tr = Cm_TransformedBoxTrace(trace->start, trace->end, trace->mins, trace->maxs, (struct g_entity_s *) (ptrdiff_t) s->number,
+		                                       head_node, trace->contents, &ent->matrix, &ent->inverse_matrix, trace->callback, trace->userdata);
 
 		if (tr.start_solid || tr.fraction < trace->trace.fraction) {
 			trace->trace = tr;
-			trace->trace.ent = (struct g_entity_s *) (ptrdiff_t) s->number;
 
 			if (tr.start_solid) {
 				return;
@@ -136,12 +149,9 @@ static void Cl_ClipTraceToEntities(cl_trace_t *trace) {
 /**
  * @brief Client-side collision model tracing. This is the reciprocal of
  * Sv_Trace.
- *
- * @param skip An optional entity number for which all tests are skipped. Pass
- * 0 for none, because entity 0 is the world, which we always test.
  */
-cm_trace_t Cl_Trace(const vec3_t start, const vec3_t end, const vec3_t mins, const vec3_t maxs,
-                    const uint16_t skip, const int32_t contents) {
+cm_trace_t Cl_CustomTrace(const vec3_t start, const vec3_t end, const vec3_t mins, const vec3_t maxs,
+                    const int32_t contents, TraceCallback callback, void *userdata) {
 
 	cl_trace_t trace;
 
@@ -155,7 +165,7 @@ cm_trace_t Cl_Trace(const vec3_t start, const vec3_t end, const vec3_t mins, con
 	}
 
 	// clip to world
-	trace.trace = Cm_BoxTrace(start, end, mins, maxs, 0, contents);
+	trace.trace = Cm_BoxTrace(start, end, mins, maxs, NULL, 0, contents, callback, userdata);
 	if (trace.trace.fraction < 1.0) {
 		trace.trace.ent = (struct g_entity_s *) (intptr_t) - 1;
 
@@ -168,14 +178,29 @@ cm_trace_t Cl_Trace(const vec3_t start, const vec3_t end, const vec3_t mins, con
 	trace.end = end;
 	trace.mins = mins;
 	trace.maxs = maxs;
-	trace.skip = skip;
 	trace.contents = contents;
+
+	trace.callback = callback;
+	trace.userdata = userdata;
 
 	Cm_TraceBounds(start, end, mins, maxs, trace.box_mins, trace.box_maxs);
 
 	Cl_ClipTraceToEntities(&trace);
 
 	return trace.trace;
+}
+
+/**
+ * @brief Client-side collision model tracing. This is the reciprocal of
+ * Sv_Trace.
+ *
+ * @param skip An optional entity number for which all tests are skipped. Pass
+ * 0 for none, because entity 0 is the world, which we always test.
+ */
+cm_trace_t Cl_Trace(const vec3_t start, const vec3_t end, const vec3_t mins, const vec3_t maxs,
+                    const uint16_t skip, const int32_t contents) {
+
+	return Cl_CustomTrace(start, end, mins, maxs, contents, Cl_ClipTraceToEntities_Callback, (struct g_entity_s *) (ptrdiff_t) skip);
 }
 
 /**
