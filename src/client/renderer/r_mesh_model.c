@@ -859,7 +859,7 @@ static void R_LoadObjPrimitive(r_model_t *mod, r_obj_t *obj, const char *line) {
 			current->num_tris++;
 		}
 
-		g_array_set_size(verts, 0);
+		verts = g_array_set_size(verts, 0);
 	}
 
 	// else we just ignore it

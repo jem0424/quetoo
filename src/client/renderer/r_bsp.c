@@ -404,7 +404,9 @@ void R_DrawBspLeafs(void) {
 			continue;
 		}
 
-		if (r_draw_bsp_leafs->integer == 2) {
+		if (r_draw_bsp_leafs->integer == 3) {
+			R_Color(r_model_state.world->bsp->clusters[l->cluster].vis_frame == r_locals.vis_frame ? leaf_colors[1] : leaf_colors[0]);
+		} else if (r_draw_bsp_leafs->integer == 2) {
 			R_Color(leaf_colors[l->cluster % lengthof(leaf_colors)]);
 		} else {
 			R_Color(leaf_colors[i % lengthof(leaf_colors)]);
@@ -438,8 +440,7 @@ void R_DrawBspLeafs(void) {
  * in that recursion must then pass a dot-product test to resolve sidedness.
  * Finally, the back-side child node is recursed.
  */
-static void R_MarkBspSurfaces_(r_bsp_node_t *node) {
-	int32_t side, side_bit;
+static void R_MarkBspSurfaces(r_bsp_node_t *node) {
 
 	if (node->contents == CONTENTS_SOLID) {
 		return;    // solid
@@ -449,9 +450,9 @@ static void R_MarkBspSurfaces_(r_bsp_node_t *node) {
 		return;    // not in view
 	}
 
-	if (R_CullBox(node->mins, node->maxs)) {
-		return;    // culled out
-	}
+	//if (R_CullBox(node->mins, node->maxs)) {
+	//	return;    // culled out
+	//}
 
 	// if leaf node, flag surfaces to draw this frame
 	if (node->contents != CONTENTS_NODE) {
@@ -463,65 +464,24 @@ static void R_MarkBspSurfaces_(r_bsp_node_t *node) {
 			}
 		}
 
-		r_bsp_surface_t **s = leaf->first_leaf_surface;
+		r_bsp_surface_t **surfs = leaf->first_leaf_surface;
 
-		for (uint16_t i = 0; i < leaf->num_leaf_surfaces; i++, s++) {
-			(*s)->vis_frame = r_locals.vis_frame;
+		for (uint16_t i = 0; i < leaf->num_leaf_surfaces; i++, surfs++) {
+			r_bsp_surface_t *s = *surfs;
+
+			s->vis_frame = r_locals.vis_frame;
+			s->frame = r_locals.frame;
+
+			g_ptr_array_add(r_model_state.world->bsp->visible_surfaces, s);
 		}
 
 		return;
 	}
 
 	// otherwise, traverse down the appropriate sides of the node
-
-	const vec_t dist = Cm_DistanceToPlane(r_view.origin, node->plane);
-
-	if (dist > SIDE_EPSILON) {
-		side = 0;
-		side_bit = 0;
-	} else {
-		side = 1;
-		side_bit = R_SURF_PLANE_BACK;
-	}
-
-	// recurse down the children, front side first
-	R_MarkBspSurfaces_(node->children[side]);
-
-	// prune all marked surfaces to just those which are front-facing
-	r_bsp_surface_t *s = r_model_state.world->bsp->surfaces + node->first_surface;
-
-	for (uint16_t i = 0; i < node->num_surfaces; i++, s++) {
-
-		if (s->vis_frame == r_locals.vis_frame) { // it's been marked
-
-			if ((s->flags & R_SURF_PLANE_BACK) != side_bit) { // but back-facing
-				s->frame = -1;
-				s->back_frame = r_locals.frame;
-			} else { // draw it
-				s->frame = r_locals.frame;
-				s->back_frame = -1;
-			}
-		}
-	}
-
-	// recurse down the back side
-	R_MarkBspSurfaces_(node->children[!side]);
-}
-
-/**
- * @brief Entry point for BSP recursion and surface-level visibility test.
- */
-void R_MarkBspSurfaces(void) {
-
-	if (++r_locals.frame == INT16_MAX) { // avoid overflows, negatives are reserved
-		r_locals.frame = 0;
-	}
-
-	// clear the bounds of the sky box
-	R_ClearSkyBox();
-
-	// flag all visible world surfaces
-	R_MarkBspSurfaces_(r_model_state.world->bsp->nodes);
+	// recurse down the children
+	R_MarkBspSurfaces(node->children[0]);
+	R_MarkBspSurfaces(node->children[1]);
 }
 
 /**
@@ -605,13 +565,13 @@ static int16_t R_CrossingContents(int32_t contents) {
 
 /**
  * @brief Mark the leafs that are in the PVS for the current cluster, creating the
- * recursion path for R_MarkSurfaces. Leafs marked for the current cluster
+ * recursion path for R_MarkBspSurfaces. Leafs marked for the current cluster
  * will still be frustum-culled, and surfaces therein must still pass a
  * dot-product test in order to be marked as visible for the current frame.
  */
 void R_UpdateVis(void) {
 	int16_t clusters[2];
-
+	
 	if (r_lock_vis->value) {
 		return;
 	}
@@ -634,11 +594,16 @@ void R_UpdateVis(void) {
 		}
 	}
 
+	g_ptr_array_set_size(r_model_state.world->bsp->visible_surfaces, 0);
+	r_model_state.world->bsp->visible_surfaces_dirty = true;
+
 	memcpy(r_locals.clusters, clusters, sizeof(r_locals.clusters));
+	
+	if (++r_locals.frame == INT16_MAX) { // avoid overflows, negatives are reserved
+		r_locals.frame = 0;
+	}
 
-	r_locals.vis_frame++;
-
-	if (r_locals.vis_frame == INT16_MAX) { // avoid overflows, negatives are reserved
+	if (++r_locals.vis_frame == INT16_MAX) { // avoid overflows, negatives are reserved
 		r_locals.vis_frame = 0;
 	}
 
@@ -704,14 +669,22 @@ void R_UpdateVis(void) {
 		}
 
 		r_bsp_node_t *node = (r_bsp_node_t *) leaf;
-		while (node) {
+		
+		while (true) {
 
 			if (node->vis_frame == r_locals.vis_frame) {
 				break;
 			}
 
 			node->vis_frame = r_locals.vis_frame;
+
+			if (!node->parent) {
+				break;
+			}
+
 			node = node->parent;
 		}
+	
+		R_MarkBspSurfaces(node);
 	}
 }

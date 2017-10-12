@@ -522,7 +522,7 @@ void R_AddStains(void) {
 	}
 
 	// reset scratch for next batch
-	g_array_set_size(r_stainmap_state.vertex_scratch, 0);
+	r_stainmap_state.vertex_scratch = g_array_set_size(r_stainmap_state.vertex_scratch, 0);
 
 	R_EnableBlend(old_blend_enabled);
 

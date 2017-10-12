@@ -84,6 +84,11 @@ static void R_FreeModel(r_media_t *self) {
 
 		R_DestroyBuffer(&mod->bsp->vertex_buffer);
 		R_DestroyBuffer(&mod->bsp->element_buffer);
+		
+		g_ptr_array_free(mod->bsp->visible_surfaces, true);
+		g_ptr_array_free(mod->bsp->surface_batches, true);
+		g_array_free(mod->bsp->visible_surface_elements, true);
+		R_DestroyBuffer(&mod->bsp->visible_element_buffer);
 
 	} else if (IS_MESH_MODEL(mod)) {
 
