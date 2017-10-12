@@ -149,19 +149,154 @@ static void R_DrawDeveloperTools(void) {
 	R_DrawBspLeafs();
 }
 
+static int32_t R_SurfaceType(const r_bsp_surface_t *surf) {
+
+	if (surf->texinfo->flags & SURF_SKY) {
+		return 5;
+	}
+
+	if (surf->texinfo->flags & (SURF_BLEND_33 | SURF_BLEND_66)) {
+		if (surf->texinfo->flags & SURF_WARP) {
+			return 4;
+		} else {
+			return 3;
+		}
+	} else {
+		if (surf->texinfo->flags & SURF_WARP) {
+			return 2;
+		} else if (surf->texinfo->flags & SURF_ALPHA_TEST) {
+			return 1;
+		} else {
+			return 0;
+		}
+	}
+}
+
+static int32_t R_PointerCmp(const void *l, const void *r) {
+
+	return (l == r) ? 0 : (l < r) ? -1 : 1;
+}
+
+static int32_t R_Uint64Cmp(const uint64_t *l, const uint64_t *r) {
+
+	return (l == r) ? 0 : (l < r) ? -1 : 1;
+}
+
+static int32_t R_SortVisibleSurface(const r_bsp_surface_t **a, const r_bsp_surface_t **b) {
+	
+	const r_bsp_surface_t *l = *a;
+	const r_bsp_surface_t *r = *b;
+	const int32_t surf_type = R_SurfaceType(l) - R_SurfaceType(r);
+	int32_t result;
+
+	if (surf_type != 0) {
+		
+		result = surf_type;
+	} else if (l->texinfo->material != r->texinfo->material) {
+		
+		result = R_PointerCmp(l->texinfo->material, r->texinfo->material);
+	} else if (l->lightmap != r->lightmap) {
+
+		result = R_PointerCmp(l->lightmap, r->lightmap);
+	} else if (l->light_mask != r->light_mask) {
+
+		result = R_Uint64Cmp(l->light_mask, r->light_mask);
+	} else {
+		return 0;
+	}
+
+	if (result) {
+		r_model_state.world->bsp->visible_surfaces_dirty = true;
+	}
+
+	return result;
+}
+
+static void R_UpdateVisibleSurfaces(void) {
+
+	g_ptr_array_sort(r_model_state.world->bsp->visible_surfaces, (GCompareFunc) R_SortVisibleSurface);
+
+	if (r_model_state.world->bsp->visible_surfaces_dirty) {
+
+		g_array_set_size(r_model_state.world->bsp->visible_surface_elements, 0);
+
+		uint32_t i = 0;
+		int32_t surf_type = -1;
+		r_material_t *material = NULL;
+		r_image_t *lightmap = NULL;
+		uint64_t light_mask = -1;
+		r_bsp_surface_batch_t batch;
+
+		for (; i < r_model_state.world->bsp->visible_surfaces->len; i++) {
+			batch.surf = ((r_bsp_surface_t **) r_model_state.world->bsp->visible_surfaces->pdata)[i];
+			const int32_t type = R_SurfaceType(batch.surf);
+
+			batch.mask = 0;
+
+			if (surf_type != type) {
+				surf_type = type;
+				batch.mask |= R_BSP_SURF_TYPE;
+			}
+
+			if (material != batch.surf->texinfo->material) {
+				material = batch.surf->texinfo->material;
+				batch.mask |= R_BSP_SURF_MAT;
+			}
+
+			if (lightmap != batch.surf->lightmap) {
+				lightmap = batch.surf->lightmap;
+				batch.mask |= R_BSP_SURF_LIGHTMAP;
+			}
+
+			if (light_mask != batch.surf->light_mask) {
+				light_mask = batch.surf->light_mask;
+				batch.mask |= R_BSP_SURF_LIGHTMASK;
+			}
+
+			if (batch.mask) {
+				
+				// finish up the old batch if we have one
+				if (batch.count) {
+					g_array_append_val(r_model_state.world->bsp->surface_batches, batch);
+				}
+
+				// start new batch with us
+				batch.start += batch.count;
+				batch.count = 0;
+			}
+
+			if (batch.count) {
+				const uint32_t restart_index = (uint32_t) -1;
+				batch.count++; // make room for the restart index
+				g_array_append_val(r_model_state.world->bsp->visible_surface_elements, restart_index);
+			}
+
+			// add to global elements buffer
+			g_array_append_vals(r_model_state.world->bsp->visible_surface_elements, batch.surf->elements, batch.surf->num_edges);
+
+			batch.count += batch.surf->num_edges;
+		}
+
+		/*Com_Print("Total changes: surf type = %u, material = %u, lightmap = %u, light_mask = %u\n", changes[0], changes[1], changes[2], changes[3]);
+		Com_Print("Total batches: %u\n", surf_batches[0] + surf_batches[1] + surf_batches[2] + surf_batches[3] + surf_batches[4]);
+		Com_Print(" - opaque: %u in %u batches\n", surf_counts[0], surf_batches[0]);
+		Com_Print(" - alpha: %u in %u batches\n", surf_counts[1], surf_batches[1]);
+		Com_Print(" - warp: %u in %u batches\n", surf_counts[2], surf_batches[2]);
+		Com_Print(" - blend: %u in %u batches\n", surf_counts[3], surf_batches[3]);
+		Com_Print(" - blendwarp: %u in %u batches\n", surf_counts[4], surf_batches[4]);*/
+	}
+}
+
 /**
  * @brief Main entry point for drawing the scene (world and entities).
  */
 void R_DrawView(void) {
 
-	// add stains first, since world uses the stainmap
-	R_AddStains();
-
 	R_UpdateFrustum();
 
 	R_UpdateVis();
 
-	R_MarkBspSurfaces();
+	R_AddStains();
 
 	R_DrawSkyBox();
 
@@ -172,6 +307,8 @@ void R_DrawView(void) {
 	R_CullEntities();
 
 	R_MarkLights();
+
+	R_UpdateVisibleSurfaces();
 
 	thread_t *sort_elements = Thread_Create(R_SortElements, NULL);
 

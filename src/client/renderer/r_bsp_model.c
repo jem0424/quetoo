@@ -1207,6 +1207,16 @@ void R_LoadBspModel(r_model_t *mod, void *buffer) {
 
 	R_InitElements(mod->bsp);
 
+	mod->bsp->visible_surfaces = g_ptr_array_new_full(1024, NULL);
+	mod->bsp->visible_surface_elements = g_array_new(false, false, sizeof(uint32_t));
+
+	mod->bsp->surface_batches = g_array_sized_new(false, false, sizeof(r_bsp_surface_batch_t), 64);
+
+	R_CreateElementBuffer(&mod->bsp->visible_element_buffer, &(const r_create_element_t) {
+		.type = R_TYPE_UNSIGNED_INT,
+		.hint = GL_STATIC_DRAW
+	});
+
 	Com_Debug(DEBUG_RENDERER, "!================================\n");
 	Com_Debug(DEBUG_RENDERER, "!R_LoadBspModel: %s\n", mod->media.name);
 	Com_Debug(DEBUG_RENDERER, "!  Verts:          %d (%d unique, %d elements)\n", r_unique_vertices.num_vertexes,

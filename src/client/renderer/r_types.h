@@ -681,6 +681,19 @@ typedef struct {
 	uint16_t hz;
 } r_model_animation_t;
 
+typedef enum {
+	R_BSP_SURF_TYPE			= 1,
+	R_BSP_SURF_MAT			= 2,
+	R_BSP_SURF_LIGHTMAP		= 4,
+	R_BSP_SURF_LIGHTMASK	= 8,
+} r_bsp_surface_batch_mask_t;
+
+typedef struct {
+	r_bsp_surface_t *surf;
+	r_bsp_surface_batch_mask_t mask;
+	uint32_t start, count;
+} r_bsp_surface_batch_t;
+
 // BSP model, used for maps
 typedef struct {
 	int32_t version;
@@ -734,6 +747,18 @@ typedef struct {
 
 	// an array of shadow counts, indexed by plane number
 	uint16_t *plane_shadows;
+
+	// a dynamic array of visible surfaces, which is compiled by
+	// visible clusters and sorted during rendering
+	GPtrArray *visible_surfaces;
+
+	// whether the visible surfaces sort was dirty
+	_Bool visible_surfaces_dirty;
+	
+	GArray *visible_surface_elements;
+	r_buffer_t visible_element_buffer;
+
+	GArray *surface_batches;
 } r_bsp_model_t;
 
 /**

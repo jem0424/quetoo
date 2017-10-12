@@ -283,7 +283,7 @@ static void R_AddSkySurface(const r_bsp_surface_t *surf) {
 /**
  * @brief
  */
-void R_ClearSkyBox(void) {
+static void R_ClearSkyBox(void) {
 	int32_t i;
 
 	for (i = 0; i < 6; i++) {
@@ -332,6 +332,9 @@ void R_DrawSkyBox(void) {
 
 	const r_bsp_surfaces_t *surfs = &r_model_state.world->bsp->sorted_surfaces->sky;
 	j = 0;
+
+	// clear the bounds of the sky box
+	R_ClearSkyBox();
 
 	// first add all visible sky surfaces to the sky bounds
 	for (i = 0; i < surfs->count; i++) {
