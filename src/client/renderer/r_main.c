@@ -219,13 +219,14 @@ static void R_UpdateVisibleSurfaces(void) {
 	if (r_model_state.world->bsp->visible_surfaces_dirty) {
 
 		g_array_set_size(r_model_state.world->bsp->visible_surface_elements, 0);
+		g_array_set_size(r_model_state.world->bsp->surface_batches, 0);
 
 		uint32_t i = 0;
 		int32_t surf_type = -1;
 		r_material_t *material = NULL;
 		r_image_t *lightmap = NULL;
 		uint64_t light_mask = -1;
-		r_bsp_surface_batch_t batch;
+		r_bsp_surface_batch_t batch = { NULL, 0, 0, 0 };
 
 		for (; i < r_model_state.world->bsp->visible_surfaces->len; i++) {
 			batch.surf = ((r_bsp_surface_t **) r_model_state.world->bsp->visible_surfaces->pdata)[i];
@@ -277,6 +278,8 @@ static void R_UpdateVisibleSurfaces(void) {
 			batch.count += batch.surf->num_edges;
 		}
 
+		R_UploadToSubBuffer(&r_model_state.world->bsp->visible_element_buffer, 0, r_model_state.world->bsp->visible_surface_elements->len * sizeof(GLuint), r_model_state.world->bsp->visible_surface_elements->data, false);
+
 		/*Com_Print("Total changes: surf type = %u, material = %u, lightmap = %u, light_mask = %u\n", changes[0], changes[1], changes[2], changes[3]);
 		Com_Print("Total batches: %u\n", surf_batches[0] + surf_batches[1] + surf_batches[2] + surf_batches[3] + surf_batches[4]);
 		Com_Print(" - opaque: %u in %u batches\n", surf_counts[0], surf_batches[0]);
@@ -312,17 +315,43 @@ void R_DrawView(void) {
 
 	thread_t *sort_elements = Thread_Create(R_SortElements, NULL);
 
-	const r_sorted_bsp_surfaces_t *surfs = r_model_state.world->bsp->sorted_surfaces;
+	//R_DrawOpaqueBspSurfaces(&surfs->opaque);
 
-	R_DrawOpaqueBspSurfaces(&surfs->opaque);
+	//R_DrawOpaqueWarpBspSurfaces(&surfs->opaque_warp);
 
-	R_DrawOpaqueWarpBspSurfaces(&surfs->opaque_warp);
+	//R_DrawAlphaTestBspSurfaces(&surfs->alpha_test);
 
-	R_DrawAlphaTestBspSurfaces(&surfs->alpha_test);
+	const r_bsp_surface_batch_t *batch = (const r_bsp_surface_batch_t * ) r_model_state.world->bsp->surface_batches->data;
+
+	glEnable(GL_PRIMITIVE_RESTART);
+	glPrimitiveRestartIndex((GLuint) -1);
+	
+	R_EnableTexture(texunit_diffuse, false);
+
+	R_BindDiffuseTexture(r_image_state.null->texnum);
+
+	R_SetArrayState(r_model_state.world);
+
+	R_BindAttributeBuffer(R_ATTRIB_ELEMENTS, &r_model_state.world->bsp->visible_element_buffer);
+
+	for (size_t i = 0; i < r_model_state.world->bsp->surface_batches->len; i++)
+	{
+		R_DrawArrays(GL_TRIANGLE_FAN, batch->start, batch->count);
+
+		batch++;
+	}
+
+	R_BindAttributeBuffer(R_ATTRIB_ELEMENTS, &r_model_state.world->bsp->element_buffer);
+	
+	R_EnableTexture(texunit_diffuse, true);
+
+	glDisable(GL_PRIMITIVE_RESTART);
 
 	R_EnableBlend(true);
 
 	R_EnableDepthMask(false);
+
+	const r_sorted_bsp_surfaces_t *surfs = r_model_state.world->bsp->sorted_surfaces;
 
 	R_DrawBackBspSurfaces(&surfs->back);
 
