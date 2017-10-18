@@ -149,60 +149,37 @@ static void R_DrawDeveloperTools(void) {
 	R_DrawBspLeafs();
 }
 
-static int32_t R_SurfaceType(const r_bsp_surface_t *surf) {
-
-	if (surf->texinfo->flags & SURF_SKY) {
-		return 5;
-	}
-
-	if (surf->texinfo->flags & (SURF_BLEND_33 | SURF_BLEND_66)) {
-		if (surf->texinfo->flags & SURF_WARP) {
-			return 4;
-		} else {
-			return 3;
-		}
-	} else {
-		if (surf->texinfo->flags & SURF_WARP) {
-			return 2;
-		} else if (surf->texinfo->flags & SURF_ALPHA_TEST) {
-			return 1;
-		} else {
-			return 0;
-		}
-	}
-}
-
-static int32_t R_PointerCmp(const void *l, const void *r) {
-
-	return (l == r) ? 0 : (l < r) ? -1 : 1;
-}
-
-static int32_t R_Uint64Cmp(const uint64_t *l, const uint64_t *r) {
-
-	return (l == r) ? 0 : (l < r) ? -1 : 1;
-}
+#define GENERIC_CMP(l, r) \
+		(l == r) ? 0 : (l < r) ? -1 : 1
 
 static int32_t R_SortVisibleSurface(const r_bsp_surface_t **a, const r_bsp_surface_t **b) {
 	
 	const r_bsp_surface_t *l = *a;
 	const r_bsp_surface_t *r = *b;
-	const int32_t surf_type = R_SurfaceType(l) - R_SurfaceType(r);
+	const int32_t surf_type = GENERIC_CMP(l->surftype, r->surftype);
 	int32_t result;
+
+	if (l == r) {
+		Com_Error(ERROR_DROP, "Surf added twice?\n");
+	}
 
 	if (surf_type != 0) {
 		
 		result = surf_type;
 	} else if (l->texinfo->material != r->texinfo->material) {
-		
-		result = R_PointerCmp(l->texinfo->material, r->texinfo->material);
+		result = GENERIC_CMP(l->texinfo->material, r->texinfo->material);
 	} else if (l->lightmap != r->lightmap) {
-
-		result = R_PointerCmp(l->lightmap, r->lightmap);
+		result = GENERIC_CMP(l->lightmap, r->lightmap);
+	} else if (l->light_frame != r->light_frame) {
+		result = GENERIC_CMP(l->light_frame, r->light_frame);
 	} else if (l->light_mask != r->light_mask) {
-
-		result = R_Uint64Cmp(l->light_mask, r->light_mask);
+		result = GENERIC_CMP(l->light_mask, r->light_mask);
+	} else if (r_model_state.world->bsp->plane_shadows[l->plane->num] != r_model_state.world->bsp->plane_shadows[r->plane->num]) {
+		result = GENERIC_CMP(r_model_state.world->bsp->plane_shadows[l->plane->num], r_model_state.world->bsp->plane_shadows[r->plane->num]);
+	} else if (!!(l->flags & R_SURF_UNDERLIQUID) != !!(r->flags & R_SURF_UNDERLIQUID)) {
+		result = GENERIC_CMP(!!(l->flags & R_SURF_UNDERLIQUID), !!(r->flags & R_SURF_UNDERLIQUID));
 	} else {
-		return 0;
+		result = GENERIC_CMP(l->index, r->index);
 	}
 
 	if (result) {
@@ -225,12 +202,15 @@ static void R_UpdateVisibleSurfaces(void) {
 		int32_t surf_type = -1;
 		r_material_t *material = NULL;
 		r_image_t *lightmap = NULL;
+		int16_t light_frame = -1;
 		uint64_t light_mask = -1;
+		uint32_t shadow_index = -1;
 		r_bsp_surface_batch_t batch = { NULL, 0, 0, 0 };
+		uint8_t underliquid = -1;
 
 		for (; i < r_model_state.world->bsp->visible_surfaces->len; i++) {
 			batch.surf = ((r_bsp_surface_t **) r_model_state.world->bsp->visible_surfaces->pdata)[i];
-			const int32_t type = R_SurfaceType(batch.surf);
+			const int32_t type = batch.surf->surftype;
 
 			batch.mask = 0;
 
@@ -249,9 +229,24 @@ static void R_UpdateVisibleSurfaces(void) {
 				batch.mask |= R_BSP_SURF_LIGHTMAP;
 			}
 
+			if (light_frame != batch.surf->light_frame) {
+				light_frame = batch.surf->light_frame;
+				batch.mask |= R_BSP_SURF_LIGHTFRAME;
+			}
+
 			if (light_mask != batch.surf->light_mask) {
 				light_mask = batch.surf->light_mask;
 				batch.mask |= R_BSP_SURF_LIGHTMASK;
+			}
+
+			if (shadow_index != r_model_state.world->bsp->plane_shadows[batch.surf->plane->num]) {
+				shadow_index = r_model_state.world->bsp->plane_shadows[batch.surf->plane->num];
+				batch.mask |= R_BSP_SURF_SHADOW;
+			}
+
+			if (underliquid != !!(batch.surf->flags & R_SURF_UNDERLIQUID)) {
+				underliquid = !!(batch.surf->flags & R_SURF_UNDERLIQUID);
+				batch.mask |= R_BSP_SURF_UNDERLIQUID;
 			}
 
 			if (batch.mask) {
@@ -279,6 +274,9 @@ static void R_UpdateVisibleSurfaces(void) {
 		}
 
 		R_UploadToSubBuffer(&r_model_state.world->bsp->visible_element_buffer, 0, r_model_state.world->bsp->visible_surface_elements->len * sizeof(GLuint), r_model_state.world->bsp->visible_surface_elements->data, false);
+		R_UnbindBuffer(R_BUFFER_ELEMENT);
+
+		r_model_state.world->bsp->visible_surfaces_dirty = false;
 
 		/*Com_Print("Total changes: surf type = %u, material = %u, lightmap = %u, light_mask = %u\n", changes[0], changes[1], changes[2], changes[3]);
 		Com_Print("Total batches: %u\n", surf_batches[0] + surf_batches[1] + surf_batches[2] + surf_batches[3] + surf_batches[4]);
@@ -321,30 +319,11 @@ void R_DrawView(void) {
 
 	//R_DrawAlphaTestBspSurfaces(&surfs->alpha_test);
 
-	const r_bsp_surface_batch_t *batch = (const r_bsp_surface_batch_t * ) r_model_state.world->bsp->surface_batches->data;
-
 	glEnable(GL_PRIMITIVE_RESTART);
 	glPrimitiveRestartIndex((GLuint) -1);
+
+	R_DrawBatchedOpaqueBspSurfaces();
 	
-	R_EnableTexture(texunit_diffuse, false);
-
-	R_BindDiffuseTexture(r_image_state.null->texnum);
-
-	R_SetArrayState(r_model_state.world);
-
-	R_BindAttributeBuffer(R_ATTRIB_ELEMENTS, &r_model_state.world->bsp->visible_element_buffer);
-
-	for (size_t i = 0; i < r_model_state.world->bsp->surface_batches->len; i++)
-	{
-		R_DrawArrays(GL_TRIANGLE_FAN, batch->start, batch->count);
-
-		batch++;
-	}
-
-	R_BindAttributeBuffer(R_ATTRIB_ELEMENTS, &r_model_state.world->bsp->element_buffer);
-	
-	R_EnableTexture(texunit_diffuse, true);
-
 	glDisable(GL_PRIMITIVE_RESTART);
 
 	R_EnableBlend(true);

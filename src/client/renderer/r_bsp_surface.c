@@ -167,6 +167,92 @@ static void R_DrawBspSurfacesLines_default(const r_bsp_surfaces_t *surfs) {
 /**
  * @brief
  */
+void R_DrawBatchedOpaqueBspSurfaces(void) {
+	
+	R_Color(NULL);
+
+	if (r_draw_wireframe->value) { // surface outlines
+		//R_DrawBspSurfacesLines_default(surfs);
+		return;
+	}
+
+	if (r_draw_bsp_lightmaps->value) {
+		R_EnableTexture(texunit_diffuse, false);
+
+		R_BindDiffuseTexture(r_image_state.null->texnum);
+	}
+
+	R_EnableTexture(texunit_lightmap, true);
+
+	if (r_deluxemap->value) {
+		R_EnableTexture(texunit_deluxemap, true);
+	}
+
+	if (r_stainmaps->value) {
+		R_EnableTexture(texunit_stainmap, true);
+	}
+
+	R_EnableLighting(program_default, true);
+
+	if (r_shadows->value) {
+		R_EnableStencilTest(GL_REPLACE, true);
+	}
+
+	
+	R_EnableTexture(texunit_diffuse, true);
+
+	R_SetArrayState(r_model_state.world);
+	
+	R_BindAttributeBuffer(R_ATTRIB_ELEMENTS, &r_model_state.world->bsp->visible_element_buffer);
+	
+	const r_bsp_surface_batch_t *batch = (const r_bsp_surface_batch_t * ) r_model_state.world->bsp->surface_batches->data;
+
+	for (size_t i = 0; i < r_model_state.world->bsp->surface_batches->len; i++, batch++)
+	{
+		const r_bsp_surface_t *surf = batch->surf;
+		
+		if (surf->surftype != R_SURFTYPE_OPAQUE) {
+			continue;
+		}
+		
+		R_SetBspSurfaceState_default(surf);
+
+		R_DrawArrays(GL_TRIANGLE_FAN, batch->start, batch->count);
+	}
+	
+	R_BindAttributeBuffer(R_ATTRIB_ELEMENTS, &r_model_state.world->bsp->element_buffer);
+
+	// reset state
+	if (r_state.lighting_enabled) {
+
+		R_EnableLights(0);
+
+		R_EnableCaustic(false);
+	}
+
+	R_UseMaterial(NULL);
+
+	R_Color(NULL);
+	
+
+	if (r_shadows->value) {
+		R_EnableStencilTest(GL_KEEP, false);
+	}
+
+	R_EnableLighting(NULL, false);
+
+	R_EnableTexture(texunit_lightmap, false);
+	R_EnableTexture(texunit_deluxemap, false);
+	R_EnableTexture(texunit_stainmap, false);
+
+	if (r_draw_bsp_lightmaps->value) {
+		R_EnableTexture(texunit_diffuse, true);
+	}
+}
+
+/**
+ * @brief
+ */
 void R_DrawOpaqueBspSurfaces_default(const r_bsp_surfaces_t *surfs) {
 
 	if (!surfs->count) {
@@ -215,24 +301,6 @@ void R_DrawOpaqueBspSurfaces_default(const r_bsp_surfaces_t *surfs) {
 	if (r_draw_bsp_lightmaps->value) {
 		R_EnableTexture(texunit_diffuse, true);
 	}
-
-#if 0
-	if (r_clear->value) {
-		byte data[r_context.width * r_context.height];
-
-		glReadPixels(0, 0, r_context.width, r_context.height, GL_UNSIGNED_BYTE, GL_STENCIL_INDEX, data);
-
-		FILE *f = fopen("/tmp/q2w.pgm", "w");
-		fprintf(f, "P2 %d %d 255\n", r_context.width, r_context.height);
-		for (r_pixel_t i = 0; i < r_context.height; i++) {
-			for (r_pixel_t j = 0; j < r_context.width; j++) {
-				fprintf(f, "%03d ", data[i * r_context.width + j]);
-			}
-			fprintf(f, "\n");
-		}
-		fclose(f);
-	}
-#endif
 }
 
 /**

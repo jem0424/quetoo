@@ -107,6 +107,8 @@ static r_particle_state_t r_particle_state;
  */
 void R_InitParticles(void) {
 
+	memset(&r_particle_state, 0, sizeof(r_particle_state));
+
 	R_CreateInterleaveBuffer(&r_particle_state.verts_buffer, &(const r_create_interleave_t) {
 		.struct_size = sizeof(r_particle_interleave_vertex_t),
 		.layout = r_particle_buffer_layout,
@@ -346,6 +348,8 @@ static void R_ParticleGeometryColor(const r_particle_t *p, r_geometry_particle_i
 void R_UpdateParticleState(void) {
 	vec3_t v;
 
+	r_particle_state.num_particles = 0;
+
 	// reset the common angular vectors for particle alignment
 	VectorCopy(r_view.angles, v);
 
@@ -418,8 +422,6 @@ void R_UploadParticles(void) {
 		R_UploadToBuffer(&p->verts_buffer, p->num_particles * sizeof(r_particle_interleave_vertex_t) * 4, p->verts);
 		R_UploadToBuffer(&p->element_buffer, p->num_particles * sizeof(uint32_t) * 6, p->elements);
 	}
-
-	p->num_particles = 0;
 }
 
 /**
