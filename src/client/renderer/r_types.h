@@ -478,6 +478,15 @@ typedef struct {
 	r_particle_t particle;
 } r_bsp_flare_t;
 
+typedef enum {
+	R_SURFTYPE_SKY,
+	R_SURFTYPE_OPAQUE,
+	R_SURFTYPE_ALPHA,
+	R_SURFTYPE_WARP,
+	R_SURFTYPE_BLEND,
+	R_SURFTYPE_BLENDWARP
+} r_bsp_surface_type_t;
+
 // r_bsp_surface_t flags
 #define R_SURF_PLANE_BACK	1
 #define R_SURF_LIGHTMAP		2
@@ -499,6 +508,7 @@ typedef struct {
 
 	cm_bsp_plane_t *plane;
 	uint16_t flags; // R_SURF flags
+	uint16_t surftype; // R_SURFTYPE_ type
 
 	int32_t first_edge; // look up in model->surf_edges, negative numbers
 	uint16_t num_edges; // are backwards edges
@@ -686,6 +696,9 @@ typedef enum {
 	R_BSP_SURF_MAT			= 2,
 	R_BSP_SURF_LIGHTMAP		= 4,
 	R_BSP_SURF_LIGHTMASK	= 8,
+	R_BSP_SURF_LIGHTFRAME	= 16,
+	R_BSP_SURF_SHADOW		= 32,
+	R_BSP_SURF_UNDERLIQUID	= 64
 } r_bsp_surface_batch_mask_t;
 
 typedef struct {

@@ -282,6 +282,30 @@ static void R_SetupBspSurface(r_bsp_model_t *bsp, r_bsp_surface_t *surf) {
 }
 
 /**
+ * @brief Returns an identifier that contains the surface type of this surface, used for
+ * batching.
+ */
+static r_bsp_surface_type_t R_BspSurfaceType(const r_bsp_surface_t *surf) {
+
+	if (surf->texinfo->flags & SURF_SKY) {
+		return R_SURFTYPE_SKY;
+	} else if (surf->texinfo->flags & (SURF_BLEND_33 | SURF_BLEND_66)) {
+
+		if (surf->texinfo->flags & SURF_WARP) {
+			return R_SURFTYPE_BLENDWARP;
+		} else {
+			return R_SURFTYPE_BLEND;
+		}
+	} else if (surf->texinfo->flags & SURF_WARP) {
+		return R_SURFTYPE_WARP;
+	} else if (surf->texinfo->flags & SURF_ALPHA_TEST) {
+		return R_SURFTYPE_ALPHA;
+	}
+
+	return R_SURFTYPE_OPAQUE;
+}
+
+/**
  * @brief Loads all r_bsp_surface_t for the specified BSP model. Lightmap and
  * deluxemap creation is driven by this function.
  */
@@ -329,6 +353,8 @@ static void R_LoadBspSurfaces(r_bsp_model_t *bsp) {
 		if (!(out->texinfo->flags & (SURF_WARP | SURF_SKY))) {
 			out->flags |= R_SURF_LIGHTMAP;
 		}
+
+		out->surftype = R_BspSurfaceType(out);
 
 		// and size, texcoords, etc
 		R_SetupBspSurface(bsp, out);
@@ -891,25 +917,28 @@ static void R_LoadBspSurfacesArrays(r_model_t *mod) {
 	r_bsp_surface_t *surf = mod->bsp->surfaces;
 	for (size_t i = 0; i < mod->bsp->num_surfaces; i++, surf++) {
 
-		if (surf->texinfo->flags & SURF_SKY) {
+		switch (surf->surftype) {
+		case R_SURFTYPE_SKY:
 			sorted->sky.count++;
 			continue;
-		}
-
-		if (surf->texinfo->flags & (SURF_BLEND_33 | SURF_BLEND_66)) {
-			if (surf->texinfo->flags & SURF_WARP) {
-				sorted->blend_warp.count++;
-			} else {
-				sorted->blend.count++;
-			}
-		} else {
-			if (surf->texinfo->flags & SURF_WARP) {
-				sorted->opaque_warp.count++;
-			} else if (surf->texinfo->flags & SURF_ALPHA_TEST) {
-				sorted->alpha_test.count++;
-			} else {
-				sorted->opaque.count++;
-			}
+		case R_SURFTYPE_BLENDWARP:
+			sorted->blend_warp.count++;
+			break;
+		case R_SURFTYPE_BLEND:
+			sorted->blend.count++;
+			break;
+		case R_SURFTYPE_ALPHA:
+			sorted->alpha_test.count++;
+			break;
+		case R_SURFTYPE_WARP:
+			sorted->opaque_warp.count++;
+			break;
+		case R_SURFTYPE_OPAQUE:
+			sorted->opaque.count++;
+			break;
+		default:
+			Com_Error(ERROR_DROP, "Invalid surface type");
+			break;
 		}
 
 		if (surf->texinfo->material->cm->flags & STAGE_DIFFUSE) {
@@ -941,25 +970,28 @@ static void R_LoadBspSurfacesArrays(r_model_t *mod) {
 	surf = mod->bsp->surfaces;
 	for (size_t i = 0; i < mod->bsp->num_surfaces; i++, surf++) {
 
-		if (surf->texinfo->flags & SURF_SKY) {
+		switch (surf->surftype) {
+		case R_SURFTYPE_SKY:
 			R_SURFACE_TO_SURFACES(&sorted->sky, surf);
 			continue;
-		}
-
-		if (surf->texinfo->flags & (SURF_BLEND_33 | SURF_BLEND_66)) {
-			if (surf->texinfo->flags & SURF_WARP) {
-				R_SURFACE_TO_SURFACES(&sorted->blend_warp, surf);
-			} else {
-				R_SURFACE_TO_SURFACES(&sorted->blend, surf);
-			}
-		} else {
-			if (surf->texinfo->flags & SURF_WARP) {
-				R_SURFACE_TO_SURFACES(&sorted->opaque_warp, surf);
-			} else if (surf->texinfo->flags & SURF_ALPHA_TEST) {
-				R_SURFACE_TO_SURFACES(&sorted->alpha_test, surf);
-			} else {
-				R_SURFACE_TO_SURFACES(&sorted->opaque, surf);
-			}
+		case R_SURFTYPE_BLENDWARP:
+			R_SURFACE_TO_SURFACES(&sorted->blend_warp, surf);
+			break;
+		case R_SURFTYPE_BLEND:
+			R_SURFACE_TO_SURFACES(&sorted->blend, surf);
+			break;
+		case R_SURFTYPE_ALPHA:
+			R_SURFACE_TO_SURFACES(&sorted->alpha_test, surf);
+			break;
+		case R_SURFTYPE_WARP:
+			R_SURFACE_TO_SURFACES(&sorted->opaque_warp, surf);
+			break;
+		case R_SURFTYPE_OPAQUE:
+			R_SURFACE_TO_SURFACES(&sorted->opaque, surf);
+			break;
+		default:
+			Com_Error(ERROR_DROP, "Invalid surface type");
+			break;
 		}
 
 		if (surf->texinfo->material->cm->flags & STAGE_DIFFUSE) {

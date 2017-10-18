@@ -469,10 +469,12 @@ static void R_MarkBspSurfaces(r_bsp_node_t *node) {
 		for (uint16_t i = 0; i < leaf->num_leaf_surfaces; i++, surfs++) {
 			r_bsp_surface_t *s = *surfs;
 
-			s->vis_frame = r_locals.vis_frame;
-			s->frame = r_locals.frame;
+			if (s->frame != r_locals.frame) {
+				s->vis_frame = r_locals.vis_frame;
+				s->frame = r_locals.frame;
 
-			g_ptr_array_add(r_model_state.world->bsp->visible_surfaces, s);
+				g_ptr_array_add(r_model_state.world->bsp->visible_surfaces, s);
+			}
 		}
 
 		return;
