@@ -473,7 +473,9 @@ static void R_MarkBspSurfaces(r_bsp_node_t *node) {
 				s->vis_frame = r_locals.vis_frame;
 				s->frame = r_locals.frame;
 
-				g_ptr_array_add(r_model_state.world->bsp->visible_surfaces, s);
+				if (true/*s->surftype == R_SURFTYPE_OPAQUE || s->surftype == R_SURFTYPE_ALPHA || s->surftype == R_SURFTYPE_WARP*/) {
+					g_ptr_array_add(r_model_state.world->bsp->visible_surfaces, s);
+				}
 			}
 		}
 

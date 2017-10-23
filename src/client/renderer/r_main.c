@@ -209,47 +209,46 @@ static void R_UpdateVisibleSurfaces(void) {
 		uint8_t underliquid = -1;
 
 		for (; i < r_model_state.world->bsp->visible_surfaces->len; i++) {
-			batch.surf = ((r_bsp_surface_t **) r_model_state.world->bsp->visible_surfaces->pdata)[i];
-			const int32_t type = batch.surf->surftype;
+			const r_bsp_surface_t *surf = ((const r_bsp_surface_t **) r_model_state.world->bsp->visible_surfaces->pdata)[i];
 
-			batch.mask = 0;
+			r_bsp_surface_batch_mask_t mask = 0;
 
-			if (surf_type != type) {
-				surf_type = type;
-				batch.mask |= R_BSP_SURF_TYPE;
+			if (surf_type != surf->surftype) {
+				surf_type = surf->surftype;
+				mask |= R_BSP_SURF_TYPE;
 			}
 
-			if (material != batch.surf->texinfo->material) {
-				material = batch.surf->texinfo->material;
-				batch.mask |= R_BSP_SURF_MAT;
+			if (material != surf->texinfo->material) {
+				material = surf->texinfo->material;
+				mask |= R_BSP_SURF_MAT;
 			}
 
-			if (lightmap != batch.surf->lightmap) {
-				lightmap = batch.surf->lightmap;
-				batch.mask |= R_BSP_SURF_LIGHTMAP;
+			if (lightmap != surf->lightmap) {
+				lightmap = surf->lightmap;
+				mask |= R_BSP_SURF_LIGHTMAP;
 			}
 
-			if (light_frame != batch.surf->light_frame) {
-				light_frame = batch.surf->light_frame;
-				batch.mask |= R_BSP_SURF_LIGHTFRAME;
+			if (light_frame != surf->light_frame) {
+				light_frame = surf->light_frame;
+				mask |= R_BSP_SURF_LIGHTFRAME;
 			}
 
-			if (light_mask != batch.surf->light_mask) {
-				light_mask = batch.surf->light_mask;
-				batch.mask |= R_BSP_SURF_LIGHTMASK;
+			if (light_mask != surf->light_mask) {
+				light_mask = surf->light_mask;
+				mask |= R_BSP_SURF_LIGHTMASK;
 			}
 
-			if (shadow_index != r_model_state.world->bsp->plane_shadows[batch.surf->plane->num]) {
-				shadow_index = r_model_state.world->bsp->plane_shadows[batch.surf->plane->num];
-				batch.mask |= R_BSP_SURF_SHADOW;
+			if (shadow_index != r_model_state.world->bsp->plane_shadows[surf->plane->num]) {
+				shadow_index = r_model_state.world->bsp->plane_shadows[surf->plane->num];
+				mask |= R_BSP_SURF_SHADOW;
 			}
 
-			if (underliquid != !!(batch.surf->flags & R_SURF_UNDERLIQUID)) {
-				underliquid = !!(batch.surf->flags & R_SURF_UNDERLIQUID);
-				batch.mask |= R_BSP_SURF_UNDERLIQUID;
+			if (underliquid != !!(surf->flags & R_SURF_UNDERLIQUID)) {
+				underliquid = !!(surf->flags & R_SURF_UNDERLIQUID);
+				mask |= R_BSP_SURF_UNDERLIQUID;
 			}
 
-			if (batch.mask) {
+			if (true) {//mask) {
 				
 				// finish up the old batch if we have one
 				if (batch.count) {
@@ -259,6 +258,8 @@ static void R_UpdateVisibleSurfaces(void) {
 				// start new batch with us
 				batch.start += batch.count;
 				batch.count = 0;
+				batch.surf = NULL;
+				batch.mask = 0;
 			}
 
 			if (batch.count) {
@@ -268,9 +269,14 @@ static void R_UpdateVisibleSurfaces(void) {
 			}
 
 			// add to global elements buffer
-			g_array_append_vals(r_model_state.world->bsp->visible_surface_elements, batch.surf->elements, batch.surf->num_edges);
+			g_array_append_vals(r_model_state.world->bsp->visible_surface_elements, surf->elements, surf->num_edges);
 
-			batch.count += batch.surf->num_edges;
+			batch.count += surf->num_edges;
+
+			if (!batch.surf) {
+				batch.surf = surf;
+				batch.mask = mask;
+			}
 		}
 
 		R_UploadToSubBuffer(&r_model_state.world->bsp->visible_element_buffer, 0, r_model_state.world->bsp->visible_surface_elements->len * sizeof(GLuint), r_model_state.world->bsp->visible_surface_elements->data, false);
@@ -312,12 +318,6 @@ void R_DrawView(void) {
 	R_UpdateVisibleSurfaces();
 
 	thread_t *sort_elements = Thread_Create(R_SortElements, NULL);
-
-	//R_DrawOpaqueBspSurfaces(&surfs->opaque);
-
-	//R_DrawOpaqueWarpBspSurfaces(&surfs->opaque_warp);
-
-	//R_DrawAlphaTestBspSurfaces(&surfs->alpha_test);
 
 	glEnable(GL_PRIMITIVE_RESTART);
 	glPrimitiveRestartIndex((GLuint) -1);

@@ -508,7 +508,7 @@ typedef struct {
 
 	cm_bsp_plane_t *plane;
 	uint16_t flags; // R_SURF flags
-	uint16_t surftype; // R_SURFTYPE_ type
+	r_bsp_surface_type_t surftype; // R_SURFTYPE_ type
 
 	int32_t first_edge; // look up in model->surf_edges, negative numbers
 	uint16_t num_edges; // are backwards edges
@@ -702,7 +702,7 @@ typedef enum {
 } r_bsp_surface_batch_mask_t;
 
 typedef struct {
-	r_bsp_surface_t *surf;
+	const r_bsp_surface_t *surf;
 	r_bsp_surface_batch_mask_t mask;
 	uint32_t start, count;
 } r_bsp_surface_batch_t;
