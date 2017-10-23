@@ -208,7 +208,17 @@ static void R_UpdateVisibleSurfaces(void) {
 		r_bsp_surface_batch_t batch = { NULL, 0, 0, 0 };
 		uint8_t underliquid = -1;
 
-		for (; i < r_model_state.world->bsp->visible_surfaces->len; i++) {
+		while (true) {
+
+			if (i == r_model_state.world->bsp->visible_surfaces->len) {
+
+				if (batch.count) {
+					g_array_append_val(r_model_state.world->bsp->surface_batches, batch);
+				}
+
+				break;
+			}
+
 			const r_bsp_surface_t *surf = ((const r_bsp_surface_t **) r_model_state.world->bsp->visible_surfaces->pdata)[i];
 
 			r_bsp_surface_batch_mask_t mask = 0;
@@ -248,7 +258,7 @@ static void R_UpdateVisibleSurfaces(void) {
 				mask |= R_BSP_SURF_UNDERLIQUID;
 			}
 
-			if (true) {//mask) {
+			if (mask) {
 				
 				// finish up the old batch if we have one
 				if (batch.count) {
@@ -277,6 +287,8 @@ static void R_UpdateVisibleSurfaces(void) {
 				batch.surf = surf;
 				batch.mask = mask;
 			}
+
+			i++;
 		}
 
 		R_UploadToSubBuffer(&r_model_state.world->bsp->visible_element_buffer, 0, r_model_state.world->bsp->visible_surface_elements->len * sizeof(GLuint), r_model_state.world->bsp->visible_surface_elements->data, false);
