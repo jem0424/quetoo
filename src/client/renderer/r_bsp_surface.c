@@ -349,11 +349,6 @@ void R_DrawBatchedOpaqueBspSurfaces(void) {
 		R_DrawArrays(GL_TRIANGLE_FAN, batch->start, batch->count);
 	}
 	
-	R_BindAttributeBuffer(R_ATTRIB_ELEMENTS, &r_model_state.world->bsp->element_buffer);
-	
-	// reset state
-	R_ResetBspSurfaceState_default();
-	
 	R_EndDrawOpaqueBspSurfaces_default();
 
 	// ALPHA
@@ -361,10 +356,6 @@ void R_DrawBatchedOpaqueBspSurfaces(void) {
 
 	R_EnableTexture(texunit_diffuse, true);
 
-	R_SetArrayState(r_model_state.world);
-	
-	R_BindAttributeBuffer(R_ATTRIB_ELEMENTS, &r_model_state.world->bsp->visible_element_buffer);
-	
 	batch = (const r_bsp_surface_batch_t * ) r_model_state.world->bsp->surface_batches->data;
 
 	for (size_t i = 0; i < r_model_state.world->bsp->surface_batches->len; i++, batch++)
@@ -380,21 +371,12 @@ void R_DrawBatchedOpaqueBspSurfaces(void) {
 		R_DrawArrays(GL_TRIANGLE_FAN, batch->start, batch->count);
 	}
 	
-	R_BindAttributeBuffer(R_ATTRIB_ELEMENTS, &r_model_state.world->bsp->element_buffer);
-	
-	// reset state
-	R_ResetBspSurfaceState_default();
-	
 	R_EndDrawAlphaTestBspSurfaces_default();
 
 	// WARP
 	R_BeginDrawWarpBspSurfaces_default();
 
 	R_EnableTexture(texunit_diffuse, true);
-
-	R_SetArrayState(r_model_state.world);
-	
-	R_BindAttributeBuffer(R_ATTRIB_ELEMENTS, &r_model_state.world->bsp->visible_element_buffer);
 	
 	batch = (const r_bsp_surface_batch_t * ) r_model_state.world->bsp->surface_batches->data;
 

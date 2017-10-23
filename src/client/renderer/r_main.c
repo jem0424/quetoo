@@ -162,6 +162,9 @@ static int32_t R_SortVisibleSurface(const r_bsp_surface_t **a, const r_bsp_surfa
 	if (l == r) {
 		Com_Error(ERROR_DROP, "Surf added twice?\n");
 	}
+	
+	const uint64_t l_light_mask = (r_locals.light_frame == l->light_frame) ? l->light_mask : 0;
+	const uint64_t r_light_mask = (r_locals.light_frame == r->light_frame) ? r->light_mask : 0;
 
 	if (surf_type != 0) {
 		
@@ -172,8 +175,8 @@ static int32_t R_SortVisibleSurface(const r_bsp_surface_t **a, const r_bsp_surfa
 		result = GENERIC_CMP(l->lightmap, r->lightmap);
 	} else if (l->light_frame != r->light_frame) {
 		result = GENERIC_CMP(l->light_frame, r->light_frame);
-	} else if (l->light_mask != r->light_mask) {
-		result = GENERIC_CMP(l->light_mask, r->light_mask);
+	} else if (l_light_mask != r_light_mask) {
+		result = GENERIC_CMP(l_light_mask, r_light_mask);
 	} else if (r_model_state.world->bsp->plane_shadows[l->plane->num] != r_model_state.world->bsp->plane_shadows[r->plane->num]) {
 		result = GENERIC_CMP(r_model_state.world->bsp->plane_shadows[l->plane->num], r_model_state.world->bsp->plane_shadows[r->plane->num]);
 	} else if (!!(l->flags & R_SURF_UNDERLIQUID) != !!(r->flags & R_SURF_UNDERLIQUID)) {
@@ -243,8 +246,10 @@ static void R_UpdateVisibleSurfaces(void) {
 				mask |= R_BSP_SURF_LIGHTFRAME;
 			}
 
-			if (light_mask != surf->light_mask) {
-				light_mask = surf->light_mask;
+			const uint64_t surf_light_mask = (r_locals.light_frame == surf->light_frame) ? surf->light_mask : 0;
+
+			if (light_mask != surf_light_mask) {
+				light_mask = surf_light_mask;
 				mask |= R_BSP_SURF_LIGHTMASK;
 			}
 
