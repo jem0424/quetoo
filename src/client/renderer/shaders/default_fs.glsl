@@ -173,11 +173,77 @@ void CausticFragment(in vec3 lightmap) {
 	}
 }
 
+#define M_PI 3.1415926535897932384626433832795
+
+/**
+ * @brief Evalutes the 2-band H-Basis coefficients in the given direction.
+ */
+vec3 EvaluateH4Color(in vec3 direction, in vec3 h0, in vec3 h1, in vec3 h2, in vec3 h3)
+{
+	if (dot(direction, vec3(0.0, 0.0, 1.0)) < 0) {
+		return vec3(0.0);
+	}
+	
+	vec3 color = vec3(0.0);
+
+	// Band 0
+	color += h0 * (1.0 / sqrt(2.0 * M_PI));
+
+	// Band 1
+	color += h1 * -sqrt(1.5 / M_PI) * direction.y;
+	color += h2 * sqrt(1.5 / M_PI) * (2.0 * direction.z - 1.0);
+	color += h3 * -sqrt(1.5 / M_PI) * direction.x;
+
+	return color;
+}
+
 /**
  * @brief Shader entry point.
  */
 void main(void) {
+	vec4 lightmapColorHDR;
 
+	vec4 normalmap = vec4(normal, 1.0);
+
+	if (NORMALMAP) {
+		// resolve the initial normalmap sample
+		normalmap = texture(SAMPLER3, texcoords[0]);
+
+		normalmap.xyz = normalize(two * (normalmap.xyz + negHalf));
+		normalmap.xyz = normalize(vec3(normalmap.x * BUMP, normalmap.y * BUMP, normalmap.z));
+	}
+
+	lightmapColorHDR = texture(SAMPLER1, vec3(texcoords[1], 0));
+	vec3 h0 = lightmapColorHDR.rgb * lightmapColorHDR.a;
+
+	lightmapColorHDR = texture(SAMPLER1, vec3(texcoords[1], 1));
+	vec3 h1 = lightmapColorHDR.rgb * lightmapColorHDR.a;
+
+	lightmapColorHDR = texture(SAMPLER1, vec3(texcoords[1], 2));
+	vec3 h2 = lightmapColorHDR.rgb * lightmapColorHDR.a;
+
+	lightmapColorHDR = texture(SAMPLER1, vec3(texcoords[1], 3));
+	vec3 h3 = lightmapColorHDR.rgb * lightmapColorHDR.a;
+
+	eyeDir = normalize(eye);
+
+	vec4 diffuse = texture(SAMPLER0, texcoords[0]);
+	float processedGrayscaleDiffuse = dot(diffuse.rgb * diffuse.a, vec3(0.299, 0.587, 0.114)) * 0.875 + 0.125;
+	float guessedGlossValue = clamp(pow(processedGrayscaleDiffuse * 3.0, 4.0), 0.0, 1.0) * 0.875 + 0.125;
+
+	vec3 eyeDirMod = eyeDir;
+
+	vec3 lightmap = EvaluateH4Color(normalmap.xyz, h0, h1, h2, h3);
+	vec3 lightmapSpecular = (HARDNESS * guessedGlossValue) * pow(clamp(dot(eyeDir, reflect(-eyeDirMod, normalmap.xyz)), 0.0078125, 1.0), (16.0 * guessedGlossValue) * SPECULAR) * EvaluateH4Color(normalize(reflect(-eyeDirMod, normalmap.xyz)), h0, h1, h2, h3);
+
+	float VdotH = max(dot(reflect(-eyeDir, normalmap.xyz), vec3(0.0, 0.0, 1.0)), 0);
+
+	lightmapSpecular = EvaluateH4Color(normalize(reflect(-eyeDir, normalmap.xyz)), h0, h1, h2, h3) * pow(1.0 - VdotH, 4.0);
+
+	fragColor.rgb = lightmapSpecular;
+	fragColor.a = diffuse.a;
+
+	/*
 	// first resolve the flat shading
 	vec3 lightmap = color.rgb;
 	vec3 deluxemap = vec3(0.0, 0.0, 1.0);
@@ -274,6 +340,9 @@ void main(void) {
 	// apply lightscale afterwards, because it should be done AFTER tonemapping
 	fragColor.rgb *= LIGHT_SCALE;
 #endif // DEBUG_LIGHTMAP_LAYER_INDEX == 0
+	*/
+
+	fragColor.rgb *= LIGHT_SCALE;
 
 	// and fog
 	FogFragment(length(point), fragColor);

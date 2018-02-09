@@ -252,8 +252,9 @@ typedef struct {
 	int32_t num_samples;
 	vec_t *origins;
 	vec_t *direct;
-	vec_t *directions;
 	vec_t *indirect;
+	vec_t *directions;
+	h4color_t *samples;
 } face_lighting_t;
 
 static face_lighting_t face_lighting[MAX_BSP_FACES];
@@ -490,7 +491,7 @@ void BuildLights(void) {
  * sunlight when a sky surface is struck.
  */
 static void GatherSampleSunlight(const vec3_t pos, const vec3_t tangent, const vec3_t bitangent, const vec3_t normal, vec_t *sample,
-                                 vec_t *direction, vec_t scale) {
+                                 vec_t *direction, h4color_t *h_basis, vec_t scale) {
 
 	if (!sun.light) {
 		return;
@@ -514,6 +515,23 @@ static void GatherSampleSunlight(const vec3_t pos, const vec3_t tangent, const v
 
 	const vec_t light = sun.light * dot;
 
+	// project onto h-basis
+	vec3_t light_color = { 0.0, 0.0, 0.0 };
+	VectorMA(light_color, light * scale, sun.color, light_color);
+	VectorScale(light_color, 1.0 / 255.0, light_color);
+
+	vec3_t light_direction;
+	VectorCopy(delta, light_direction);
+	VectorNormalize(light_direction);
+	WorldSpaceToTangentSpace(tangent, bitangent, normal, light_direction, light_direction);
+
+	h4color_t light_h4color;
+	ProjectOntoH4Color(light_direction, light_color, &light_h4color);
+
+	for (size_t h = 0; h < 4; h++) {
+		VectorAdd((*h_basis)[h], light_h4color[h], (*h_basis)[h]);
+	}
+
 	// add some light to it
 	VectorMA(sample, light * scale, sun.color, sample);
 
@@ -528,7 +546,7 @@ static void GatherSampleSunlight(const vec3_t pos, const vec3_t tangent, const v
  * @brief Iterate over all light sources for the sample position's PVS, accumulating
  * light and directional information to the specified pointers.
  */
-static void GatherSampleLight(vec3_t pos, vec3_t tangent, vec3_t bitangent, vec3_t normal,  byte *pvs, vec_t *sample, vec_t *direction, vec_t scale) {
+static void GatherSampleLight(vec3_t pos, vec3_t tangent, vec3_t bitangent, vec3_t normal,  byte *pvs, vec_t *sample, vec_t *direction, h4color_t *h_basis, vec_t scale) {
 
 	// iterate over lights, which are in buckets by cluster
 	for (int32_t i = 0; i < bsp_file.vis_data.vis->num_clusters; i++) {
@@ -586,6 +604,23 @@ static void GatherSampleLight(vec3_t pos, vec3_t tangent, vec3_t bitangent, vec3
 				continue; // occluded
 			}
 
+			// project onto h-basis
+			vec3_t light_color = { 0.0, 0.0, 0.0 };
+			VectorMA(light_color, light * scale, l->color, light_color);
+			VectorScale(light_color, 1.0 / 255.0, light_color);
+
+			vec3_t light_direction;
+			VectorCopy(delta, light_direction);
+			VectorNormalize(light_direction);
+			WorldSpaceToTangentSpace(tangent, bitangent, normal, light_direction, light_direction);
+
+			h4color_t light_h4color;
+			ProjectOntoH4Color(light_direction, light_color, &light_h4color);
+
+			for (size_t h = 0; h < 4; h++) {
+				VectorAdd((*h_basis)[h], light_h4color[h], (*h_basis)[h]);
+			}
+
 			// add some light to it
 			VectorMA(sample, light * scale, l->color, sample);
 
@@ -597,7 +632,7 @@ static void GatherSampleLight(vec3_t pos, vec3_t tangent, vec3_t bitangent, vec3
 		}
 	}
 
-	GatherSampleSunlight(pos, tangent, bitangent, normal, sample, direction, scale);
+	GatherSampleSunlight(pos, tangent, bitangent, normal, sample, direction, h_basis, scale);
 }
 
 #define SAMPLE_NUDGE 0.25
@@ -826,8 +861,10 @@ void DirectLighting(int32_t face_num) {
 	memcpy(fl->origins, light.sample_points, fl->num_samples * sizeof(vec3_t));
 
 	fl->direct = Mem_TagMalloc(fl->num_samples * sizeof(vec3_t), MEM_TAG_FACE_LIGHTING);
-	fl->directions = Mem_TagMalloc(fl->num_samples * sizeof(vec3_t), MEM_TAG_FACE_LIGHTING);
 	fl->indirect = Mem_TagMalloc(fl->num_samples * sizeof(vec3_t), MEM_TAG_FACE_LIGHTING);
+	fl->directions = Mem_TagMalloc(fl->num_samples * sizeof(vec3_t), MEM_TAG_FACE_LIGHTING);
+	
+	fl->samples = Mem_TagMalloc(fl->num_samples * sizeof(h4color_t), MEM_TAG_FACE_LIGHTING);
 
 	const vec_t *center = face_extents[face_num].center; // center of the face
 
@@ -835,6 +872,7 @@ void DirectLighting(int32_t face_num) {
 
 		vec_t *sample = fl->direct + i * 3; // accumulate lighting here
 		vec_t *direction = fl->directions + i * 3; // accumulate direction here
+		h4color_t *h_basis = fl->samples + i;
 
 		for (int32_t j = 0; j < num_samples; j++) { // with antialiasing
 
@@ -861,7 +899,7 @@ void DirectLighting(int32_t face_num) {
 			TangentVectors(normal, light.texinfo->vecs[0], light.texinfo->vecs[1], tangent, bitangent);
 
 			// query all light sources within range for their contribution
-			GatherSampleLight(pos, tangent, bitangent, normal, pvs, sample, direction, 1.0 / num_samples);
+			GatherSampleLight(pos, tangent, bitangent, normal, pvs, sample, direction, h_basis, 1.0 / num_samples);
 		}
 	}
 
@@ -1011,7 +1049,7 @@ void FinalizeLighting(int32_t face_num) {
 	bsp_file.lightmap_data_size += fl->num_samples * lightmap_color_channels;
 
 	if (!legacy) { // account for light direction data as well
-		bsp_file.lightmap_data_size += fl->num_samples * lightmap_color_channels;
+		bsp_file.lightmap_data_size += fl->num_samples * lightmap_color_channels * 3;
 	}
 
 	if (bsp_file.lightmap_data_size > MAX_BSP_LIGHTING) {
@@ -1029,6 +1067,7 @@ void FinalizeLighting(int32_t face_num) {
 
 		const vec_t *direct = fl->direct + i * 3;
 		const vec_t *indirect = fl->indirect + i * 3;
+		const h4color_t *samples = fl->samples + i;
 
 		// start with raw sample data
 		VectorAdd(direct, indirect, lightmap);
@@ -1047,6 +1086,19 @@ void FinalizeLighting(int32_t face_num) {
 				*dest++ = (byte) Clamp(floor(lightmap[j] * 255.0 + 0.5), 0, 255);
 			}
 		} else { // write out HDR lightmaps and deluxemaps
+			for (size_t h = 0; h < 4; h++) {
+				vec3_t temp;
+
+				VectorCopy((*samples)[h], temp);
+				ColorNormalize(temp, temp);
+				ColorEncodeRGBM(temp, hdr_lightmap);
+
+				for (int32_t j = 0; j < 4; j++) {
+					*dest++ = (byte)Clamp(floor(hdr_lightmap[j] * 255.0 + 0.5), 0, 255);
+				}
+			}
+
+			continue;
 
 			ColorEncodeRGBM(lightmap, hdr_lightmap);
 

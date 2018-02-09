@@ -202,8 +202,8 @@ void ColorDecompose3(const vec3_t in, u8vec3_t out);
 typedef vec_t h4_t[4];
 typedef vec3_t h4color_t[4];
 
-void ProjectOntoH4(const vec3_t direction, h4_t result);
-void ProjectOntoH4Color(const vec3_t direction, const vec3_t color, h4color_t result);
+void ProjectOntoH4(const vec3_t direction, h4_t *result);
+void ProjectOntoH4Color(const vec3_t direction, const vec3_t color, h4color_t *result);
 
 void EvaluateH4(const h4_t h, const vec3_t direction, vec_t *result);
 void EvaluateH4Color(const h4color_t h, const vec3_t direction, vec3_t result);
