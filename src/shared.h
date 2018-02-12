@@ -205,9 +205,10 @@ typedef struct {
 	float sharpness;
 } sg_t;
 
-#define MAX_SG_COUNT 32
+#define MAX_SG_COUNT 256
 
 void GenerateUniformSGs(sg_t *sgs, size_t sgs_count);
+void GenerateSourceBasisSGs(sg_t *sgs);
 void ProjectOntoSGs(const vec3_t dir, const vec3_t color, sg_t *sgs, size_t sgs_count);
 
 /**

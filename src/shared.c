@@ -712,6 +712,24 @@ void GenerateUniformSGs(sg_t *sgs, size_t sgs_count) {
 	}
 }
 
+void GenerateSourceBasisSGs(sg_t *sgs) {
+	vec3_t source_basis[4] = {
+		{ 0.0, 0.0, 1.0 },
+		{ 1.0 / -sqrt(6.0), 1.0 / sqrt(2.0), 1.0 / sqrt(3.0) },
+		{ 1.0 / -sqrt(6.0), 1.0 / -sqrt(2.0), 1.0 / sqrt(3.0) },
+		{ sqrt(2.0 / 3.0), 0.0, 1.0 / sqrt(3.0) }
+	};
+
+	for (size_t k = 0; k < 4; k++) {
+		VectorCopy(vec3_origin, sgs[k].amplitude);
+		
+		VectorCopy(source_basis[k], sgs[k].axis);
+		VectorNormalize(sgs[k].axis);
+
+		sgs[k].sharpness = 2.1666666666666666666666666666667;
+	}
+}
+
 void ProjectOntoSGs(const vec3_t dir, const vec3_t color, sg_t *sgs, size_t sgs_count) {
 	for (size_t i = 0; i < sgs_count; i++)	{
 		sg_t sg;

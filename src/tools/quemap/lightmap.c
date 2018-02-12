@@ -863,11 +863,12 @@ void DirectLighting(int32_t face_num) {
 	static _Bool sgs_generated = false;
 
 	if (!sgs_generated) {
+		Com_Verbose("float sharpness = %f;\n\n", fl->samples[0].sharpness);
+		Com_Verbose("vec3 axisData[%d] = vec3[%d](\n", MAX_LIGHTMAP_PAGES, MAX_LIGHTMAP_PAGES);
 		for (size_t k = 0; k < MAX_LIGHTMAP_PAGES; k++) {
-			Com_Verbose("sg.amplitude = vec3(%f, %f, %f);\n", fl->samples[k].amplitude[0], fl->samples[k].amplitude[1], fl->samples[k].amplitude[2]);
-			Com_Verbose("sg.axis = vec3(%f, %f, %f);\n", fl->samples[k].axis[0], fl->samples[k].axis[1], fl->samples[k].axis[2]);
-			Com_Verbose("sg.sharpness = %f;\n", fl->samples[k].sharpness);
+			Com_Verbose("\tvec3(%f, %f, %f),\n", fl->samples[k].axis[0], fl->samples[k].axis[1], fl->samples[k].axis[2]);
 		}
+		Com_Verbose(");\n");
 	}
 
 	sgs_generated = true;
@@ -1067,13 +1068,15 @@ void FinalizeLighting(int32_t face_num) {
 	// write it out
 	byte *dest = &bsp_file.lightmap_data[f->light_ofs];
 
+	VectorScale(ambient, 0.75, ambient);
+
 	for (int32_t i = 0; i < fl->num_samples; i++) {
 		vec3_t lightmap;
 		vec4_t hdr_lightmap;
 
 		const vec_t *direct = fl->direct + i * 3;
 		const vec_t *indirect = fl->indirect + i * 3;
-		const sg_t *sgs = fl->samples + i * MAX_LIGHTMAP_PAGES;
+		sg_t *sgs = fl->samples + i * MAX_LIGHTMAP_PAGES;
 
 		// start with raw sample data
 		VectorAdd(direct, indirect, lightmap);
@@ -1092,11 +1095,14 @@ void FinalizeLighting(int32_t face_num) {
 				*dest++ = (byte) Clamp(floor(lightmap[j] * 255.0 + 0.5), 0, 255);
 			}
 		} else { // write out HDR lightmaps and deluxemaps
+			ProjectOntoSGs(vec3_up, ambient, sgs, MAX_LIGHTMAP_PAGES);
+
 			for (size_t k = 0; k < MAX_LIGHTMAP_PAGES; k++) {
 				vec3_t temp;
 
 				VectorCopy(sgs[k].amplitude, temp);
 				ColorNormalize(temp, temp);
+
 				ColorEncodeRGBM(temp, hdr_lightmap);
 
 				for (int32_t j = 0; j < 4; j++) {
