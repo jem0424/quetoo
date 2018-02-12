@@ -197,16 +197,18 @@ void ColorDecompose(const vec4_t in, u8vec4_t out);
 void ColorDecompose3(const vec3_t in, u8vec3_t out);
 
 /**
-* @brief H-basis manipulating.
+* @brief Spherical Gaussians.
 */
-typedef vec_t h4_t[4];
-typedef vec3_t h4color_t[4];
+typedef struct {
+	vec3_t amplitude;
+	vec3_t axis;
+	float sharpness;
+} sg_t;
 
-void ProjectOntoH4(const vec3_t direction, h4_t *result);
-void ProjectOntoH4Color(const vec3_t direction, const vec3_t color, h4color_t *result);
+#define MAX_SG_COUNT 32
 
-void EvaluateH4(const h4_t h, const vec3_t direction, vec_t *result);
-void EvaluateH4Color(const h4color_t h, const vec3_t direction, vec3_t result);
+void GenerateUniformSGs(sg_t *sgs, size_t sgs_count);
+void ProjectOntoSGs(const vec3_t dir, const vec3_t color, sg_t *sgs, size_t sgs_count);
 
 /**
  * @brief String manipulation functions.

@@ -667,46 +667,73 @@ void ColorDecompose3(const vec3_t in, u8vec3_t out) {
 }
 
 /**
-* @brief H-basis manipulating.
-*/
-void ProjectOntoH4(const vec3_t direction, h4_t *result) {
-	// Band 0
-	(*result)[0] = (1.0 / sqrt(2.0 * M_PI));
+ * @brief Spherical Gaussians.
+ */
+void GenerateUniformSGs(sg_t *sgs, size_t sgs_count) {
+	const size_t N = sgs_count * 2;
 
-	// Band 1
-	(*result)[1] = -sqrt(1.5 / M_PI) * direction[1];
-	(*result)[2] = sqrt(1.5 / M_PI) * (2.0 * direction[2] - 1.0);
-	(*result)[3] = -sqrt(1.5 / M_PI) * direction[0];
-}
+	vec3_t means[MAX_SG_COUNT * 2];
 
-void ProjectOntoH4Color(const vec3_t direction, const vec3_t color, h4color_t *result) {
-	h4_t projected;
-	ProjectOntoH4(direction, &projected);
+	const float increment = M_PI * (3.0 - sqrt(5.0));
+	const float offset = 2.0 / (float)N;
 
-	for (size_t i = 0; i < 4; i++) {
-		VectorScale(color, projected[i], (*result)[i]);
+	for (size_t k = 0; k < N; k++) {
+		const float y = k * offset - 1.0 + (offset / 2.0);
+		const float r = sqrt(1.0 - y * y);
+		const float phi = k * increment;
+
+		means[k][0] = cos(phi) * r;
+		means[k][1] = sin(phi) * r;
+		means[k][2] = y;
+	}
+
+	size_t current_sg = 0;
+
+	for (size_t k = 0; k < N; k++) {
+		if (DotProduct(means[k], vec3_up) >= 0.0) {
+			VectorCopy(vec3_origin, sgs[current_sg].amplitude);
+
+			VectorCopy(means[k], sgs[current_sg].axis);
+			VectorNormalize(sgs[current_sg].axis);
+
+			current_sg++;
+		}
+	}
+
+	vec3_t half;
+
+	VectorAdd(sgs[0].axis, sgs[1].axis, half);
+	VectorNormalize(half);
+
+	const float sharpness = (log(0.65) * sgs_count) / (DotProduct(half, sgs[0].axis) - 1.0);
+
+	for (size_t k = 0; k < sgs_count; k++) {
+		sgs[k].sharpness = sharpness;
 	}
 }
 
-void EvaluateH4(const h4_t h, const vec3_t direction, vec_t *result) {
-	h4_t projected;
-	ProjectOntoH4(direction, &projected);
+void ProjectOntoSGs(const vec3_t dir, const vec3_t color, sg_t *sgs, size_t sgs_count) {
+	for (size_t i = 0; i < sgs_count; i++)	{
+		sg_t sg;
 
-	*result = 0.0;
+		VectorCopy(color, sg.amplitude);
 
-	for (size_t i = 0; i < 4; i++) {
-		*result += projected[i] * h[i];
-	}
-}
+		VectorCopy(dir, sg.axis);
+		VectorNormalize(sg.axis);
 
-void EvaluateH4Color(const h4color_t h, const vec3_t direction, vec3_t result) {
-	h4_t projected;
-	ProjectOntoH4(direction, &projected);
+		const float dot_product = DotProduct(sgs[i].axis, sg.axis);
 
-	VectorCopy(vec3_origin, result);
+		if (dot_product > 0.0) {
+			const float factor = (dot_product - 1.0) * sgs[i].sharpness;
+			const float weight = exp(factor);
 
-	for (size_t i = 0; i < 4; i++) {
-		VectorMA(result, projected[i], h[i], result);
+			VectorScale(sg.amplitude, weight, sg.amplitude);
+			VectorAdd(sgs[i].amplitude, sg.amplitude, sgs[i].amplitude);
+
+			assert(sgs[i].amplitude[0] >= 0.0);
+			assert(sgs[i].amplitude[1] >= 0.0);
+			assert(sgs[i].amplitude[2] >= 0.0);
+		}
 	}
 }
 
