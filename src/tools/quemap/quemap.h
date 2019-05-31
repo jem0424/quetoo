@@ -25,6 +25,7 @@
 #include "common.h"
 #include "monitor.h"
 #include "work.h"
+#include "work_cu.h"
 
 /**
  * @brief Quemap .prt file magic.

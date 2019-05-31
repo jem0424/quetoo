@@ -22,6 +22,7 @@
 #include <SDL_timer.h>
 
 #include "quemap.h"
+#include "work_cu.h"
 
 typedef struct {
 	SDL_mutex *lock; // mutex on all running work
@@ -78,6 +79,14 @@ static void RunWorkFunc(void *p) {
 	}
 }
 
+/*
+ * helper for RunWorkFunc
+ */
+
+void RunFunc(void *p) {
+	RunWorkFunc(p);
+}
+
 /**
  * @brief
  */
@@ -96,39 +105,47 @@ void WorkUnlock(void) {
  * @brief Entry point for all thread work requests.
  */
 void Work(const char *name, WorkFunc func, int32_t count) {
+	int cudaDeviceCount;
+	cudaGetDeviceount(&cudaDeviceCount);
 
-	memset(&work, 0, sizeof(work));
-
-	work.lock = SDL_CreateMutex();
-	work.name = name;
-	work.count = count;
-	work.func = func;
-	work.index = 0;
-	work.percent = -1;
-
-	const uint32_t start = SDL_GetTicks();
-
-	const int32_t thread_count = Thread_Count();
-
-	if (thread_count == 0) {
-		RunWorkFunc(0);
+	if (cudaDeviceCount > 0) {
+		// if there's a cuda capable device, pass the work onto the kernel
+		dispatchWork(name, func, count);
 	} else {
-		thread_t *threads[thread_count];
+		memset(&work, 0, sizeof(work));
 
-		for (int32_t i = 0; i < thread_count; i++) {
-			threads[i] = Thread_Create(RunWorkFunc, NULL, 0);
-		}
+			work.lock = SDL_CreateMutex();
+			work.name = name;
+			work.count = count;
+			work.func = func;
+			work.index = 0;
+			work.percent = -1;
 
-		for (int32_t i = 0; i < thread_count; i++) {
-			Thread_Wait(threads[i]);
-		}
+			const uint32_t start = SDL_GetTicks();
+
+			const int32_t thread_count = Thread_Count();
+
+			if (thread_count == 0) {
+				RunWorkFunc(0);
+			} else {
+				thread_t *threads[thread_count];
+
+				for (int32_t i = 0; i < thread_count; i++) {
+					threads[i] = Thread_Create(RunWorkFunc, NULL, 0);
+				}
+
+				for (int32_t i = 0; i < thread_count; i++) {
+					Thread_Wait(threads[i]);
+				}
+			}
+
+			SDL_DestroyMutex(work.lock);
+
+			const uint32_t end = SDL_GetTicks();
+
+			if (work.name) {
+				Com_Print(" %d ms\n", end - start);
+			}
 	}
 
-	SDL_DestroyMutex(work.lock);
-
-	const uint32_t end = SDL_GetTicks();
-
-	if (work.name) {
-		Com_Print(" %d ms\n", end - start);
-	}
 }
