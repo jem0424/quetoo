@@ -24,8 +24,11 @@
 
 #include "work.h"
 
-__global__ void GetWork(void) {
-
+/**
+ * @brief CUDA kernel to run the configured WorkFunc for the current CUDA thread.
+ */
+__global__ void RunWorkFunc(work_t *work) {
+	work->func(work->index + threadIdx.x);
 }
 
 extern "C" {
@@ -48,10 +51,25 @@ int32_t WorkCuda(work_t *work) {
 		int threads;
 		cuDeviceGetAttribute(&threads, CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK, device);
 
-		printf("Let's run some threads.. %d\n", threads);
+		while (work->index < work->count) {
+
+			int n = threads;
+
+			if (work->index + n > work->count) {
+				n = work->count - work->index;
+			}
+
+			RunWorkFunc<<<1, n>>>(work);
+
+			cuCtxSynchronize();
+
+			work->index += n;
+
+			printf("Ran %d threads\n", n);
+		}
 	}
 
-	return 0;
+	return count;
 }
 
 }

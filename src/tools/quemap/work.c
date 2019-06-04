@@ -105,6 +105,7 @@ void Work(const char *name, WorkFunc func, int32_t count) {
 		lock = SDL_CreateMutex();
 
 		const int32_t thread_count = Thread_Count();
+
 		if (thread_count == 0) {
 			RunWorkFunc(NULL);
 		} else {
