@@ -19,18 +19,39 @@
  * Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  */
 
-#pragma once
+#include <cuda.h>
+#include <stdio.h>
 
-typedef void (*WorkFunc)(int32_t);
+#include "work.h"
 
-typedef struct {
-	const char *name; // the work name
-	WorkFunc func; // the work function
-	int32_t index; // current work cycle
-	int32_t count; // total work cycles
-	int32_t percent; // last fraction of work completed
-} work_t;
+__global__ void GetWork(void) {
 
-void WorkLock(void);
-void WorkUnlock(void);
-void Work(const char *name, WorkFunc func, int32_t count);
+}
+
+extern "C" {
+
+/**
+ * @brief
+ */
+int32_t WorkCuda(work_t *work) {
+
+	cuInit(0);
+
+	int count;
+	cuDeviceGetCount(&count);
+
+	if (count > 0) {
+
+		CUdevice device;
+		cuDeviceGet(&device, 0);
+
+		int threads;
+		cuDeviceGetAttribute(&threads, CU_DEVICE_ATTRIBUTE_MAX_THREADS_PER_BLOCK, device);
+
+		printf("Let's run some threads.. %d\n", threads);
+	}
+
+	return 0;
+}
+
+}

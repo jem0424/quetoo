@@ -24,6 +24,7 @@
 #include "collision/collision.h"
 #include "common.h"
 #include "monitor.h"
+#include "thread.h"
 #include "work.h"
 
 /**

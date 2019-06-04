@@ -22,17 +22,10 @@
 #include <SDL_timer.h>
 
 #include "quemap.h"
-
-typedef struct {
-	SDL_mutex *lock; // mutex on all running work
-	const char *name; // the work name
-	WorkFunc func; // the work function
-	int32_t index; // current work cycle
-	int32_t count; // total work cycles
-	int32_t percent; // last fraction of work completed
-} work_t;
+#include "work-cuda.h"
 
 static work_t work;
+static SDL_mutex *lock;
 
 /**
  * @brief Return an iteration of work, updating progress when appropriate.
@@ -82,14 +75,14 @@ static void RunWorkFunc(void *p) {
  * @brief
  */
 void WorkLock(void) {
-	SDL_LockMutex(work.lock);
+	SDL_LockMutex(lock);
 }
 
 /**
  * @brief
  */
 void WorkUnlock(void) {
-	SDL_UnlockMutex(work.lock);
+	SDL_UnlockMutex(lock);
 }
 
 /**
@@ -99,7 +92,6 @@ void Work(const char *name, WorkFunc func, int32_t count) {
 
 	memset(&work, 0, sizeof(work));
 
-	work.lock = SDL_CreateMutex();
 	work.name = name;
 	work.count = count;
 	work.func = func;
@@ -108,23 +100,27 @@ void Work(const char *name, WorkFunc func, int32_t count) {
 
 	const uint32_t start = SDL_GetTicks();
 
-	const int32_t thread_count = Thread_Count();
+	if (WorkCuda(&work) == 0) {
 
-	if (thread_count == 0) {
-		RunWorkFunc(0);
-	} else {
-		thread_t *threads[thread_count];
+		lock = SDL_CreateMutex();
 
-		for (int32_t i = 0; i < thread_count; i++) {
-			threads[i] = Thread_Create(RunWorkFunc, NULL, 0);
+		const int32_t thread_count = Thread_Count();
+		if (thread_count == 0) {
+			RunWorkFunc(NULL);
+		} else {
+			thread_t *threads[thread_count];
+
+			for (int32_t i = 0; i < thread_count; i++) {
+				threads[i] = Thread_Create(RunWorkFunc, NULL, 0);
+			}
+
+			for (int32_t i = 0; i < thread_count; i++) {
+				Thread_Wait(threads[i]);
+			}
 		}
 
-		for (int32_t i = 0; i < thread_count; i++) {
-			Thread_Wait(threads[i]);
-		}
+		SDL_DestroyMutex(lock);
 	}
-
-	SDL_DestroyMutex(work.lock);
 
 	const uint32_t end = SDL_GetTicks();
 

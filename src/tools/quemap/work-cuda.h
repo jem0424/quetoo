@@ -21,16 +21,4 @@
 
 #pragma once
 
-typedef void (*WorkFunc)(int32_t);
-
-typedef struct {
-	const char *name; // the work name
-	WorkFunc func; // the work function
-	int32_t index; // current work cycle
-	int32_t count; // total work cycles
-	int32_t percent; // last fraction of work completed
-} work_t;
-
-void WorkLock(void);
-void WorkUnlock(void);
-void Work(const char *name, WorkFunc func, int32_t count);
+extern int32_t WorkCuda(work_t *work);

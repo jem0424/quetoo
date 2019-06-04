@@ -27,7 +27,7 @@ fi
 AC_DEFINE_UNQUOTED(REVISION, "$REVISION", [Git revision])
 
 AM_INIT_AUTOMAKE([foreign subdir-objects])
-AM_SILENT_RULES([yes])
+AM_SILENT_RULES
 
 dnl ---------------
 dnl Check for tools
@@ -36,6 +36,13 @@ dnl ---------------
 AC_PROG_CC
 AC_PROG_CC_STDC
 AC_PROG_LIBTOOL
+
+dnl --------------
+dnl Check for CUDA
+dnl --------------
+
+AX_CHECK_CUDA
+AC_PATH_PROG(NVCC, nvcc, )
 
 dnl --------------------
 dnl Check for pkg-config

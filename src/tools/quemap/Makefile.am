@@ -1,3 +1,7 @@
+
+work-cuda.o: work-cuda.cu
+	@NVCC@ @CUDA_CFLAGS@ -c work-cuda.cu
+	
 bin_PROGRAMS = \
 	quemap
 
@@ -65,22 +69,25 @@ quemap_CFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src \
 	@BASE_CFLAGS@ \
+	@CUDA_CFLAGS@ \
 	@CURSES_CFLAGS@ \
 	@GLIB_CFLAGS@ \
 	@SDL2_CFLAGS@ \
 	@XML_CFLAGS@
 
 quemap_LDADD = \
+	work-cuda.o \
 	$(top_builddir)/deps/minizip/libminizip.la \
 	$(top_builddir)/src/libatlas.la \
 	$(top_builddir)/src/collision/libcollision.la \
 	$(top_builddir)/src/net/libnet.la \
 	$(top_builddir)/src/libimage.la \
 	$(top_builddir)/src/libthread.la \
+	@CUDA_LDFLAGS@ -lcuda -lcudart -lstdc++ \
 	@CURSES_LIBS@ \
 	@SDL2_LIBS@ \
 	@XML_LIBS@
-
+		
 if MINGW
 
 .rc.o:
